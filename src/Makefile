@@ -318,7 +318,7 @@ CClink = $(CC)
 # Change this to your desire and do 'make config' afterwards
 
 # examples (can only use one!):
-#CONF_ARGS = --exec-prefix=/usr
+CONF_ARGS = --exec-prefix=/usr
 #CONF_ARGS = --with-vim-name=vim7 --with-ex-name=ex7 --with-view-name=view7
 #CONF_ARGS = --with-global-runtime=/etc/vim
 #CONF_ARGS = --with-local-dir=/usr/share
@@ -364,6 +364,7 @@ CClink = $(CC)
 # GTK+ 3.
 #
 # If the selected GUI isn't found, the GUI is disabled automatically
+CONF_OPT_GUI = --enable-gui=yes
 #CONF_OPT_GUI = --enable-gui=gtk2
 #CONF_OPT_GUI = --enable-gui=gtk2 --disable-gtktest
 #CONF_OPT_GUI = --enable-gui=gnome2
@@ -405,7 +406,7 @@ CClink = $(CC)
 # Set PATH environment variable to find lua or luajit executable.
 # This requires at least "normal" features, "tiny" and "small" don't work.
 #CONF_OPT_LUA = --enable-luainterp
-#CONF_OPT_LUA = --enable-luainterp=dynamic
+CONF_OPT_LUA = --enable-luainterp=dynamic
 #CONF_OPT_LUA = --enable-luainterp --with-luajit
 #CONF_OPT_LUA = --enable-luainterp=dynamic --with-luajit
 # Lua installation dir (when not set uses $LUA_PREFIX or defaults to /usr)
@@ -432,7 +433,7 @@ CClink = $(CC)
 # one: "touch perl.exp".
 # This requires at least "normal" features, "tiny" and "small" don't work.
 #CONF_OPT_PERL = --enable-perlinterp
-#CONF_OPT_PERL = --enable-perlinterp=dynamic
+CONF_OPT_PERL = --enable-perlinterp=dynamic
 
 # PYTHON
 # Uncomment lines here when you want to include the Python interface.
@@ -446,10 +447,10 @@ CClink = $(CC)
 # However, this may still cause problems, such as "import termios" failing.
 # Build two separate versions of Vim in that case.
 #CONF_OPT_PYTHON = --enable-pythoninterp
-#CONF_OPT_PYTHON = --enable-pythoninterp --with-python-command=python2.7
+CONF_OPT_PYTHON = --enable-pythoninterp --with-python-command=python2
 #CONF_OPT_PYTHON = --enable-pythoninterp=dynamic
 #CONF_OPT_PYTHON3 = --enable-python3interp
-#CONF_OPT_PYTHON3 = --enable-python3interp --with-python3-command=python3.6
+CONF_OPT_PYTHON3 = --enable-python3interp --with-python3-command=python3
 #CONF_OPT_PYTHON3 = --enable-python3interp=dynamic
 
 # RUBY
@@ -458,7 +459,7 @@ CClink = $(CC)
 # Note: you need the development package (e.g., ruby1.9.1-dev on Ubuntu).
 # This requires at least "normal" features, "tiny" and "small" don't work.
 #CONF_OPT_RUBY = --enable-rubyinterp
-#CONF_OPT_RUBY = --enable-rubyinterp=dynamic
+CONF_OPT_RUBY = --enable-rubyinterp=dynamic
 #CONF_OPT_RUBY = --enable-rubyinterp --with-ruby-command=ruby1.9.1
 
 # TCL
@@ -470,7 +471,7 @@ CClink = $(CC)
 
 # CSCOPE
 # Uncomment this when you want to include the Cscope interface.
-#CONF_OPT_CSCOPE = --enable-cscope
+CONF_OPT_CSCOPE = --enable-cscope
 
 # WORKSHOP - Sun Visual Workshop interface.  Only works with Motif!
 #CONF_OPT_WORKSHOP = --enable-workshop
@@ -489,7 +490,7 @@ CClink = $(CC)
 # Uncomment the first line when you want terminal emulator support for
 # not-huge builds.  Uncomment the second line when you don't want terminal
 # emulator support in the huge build.
-#CONF_OPT_TERMINAL = --enable-terminal
+CONF_OPT_TERMINAL = --enable-terminal
 #CONF_OPT_TERMINAL = --disable-terminal
 
 # MULTIBYTE - To edit multi-byte characters.
@@ -515,7 +516,7 @@ CClink = $(CC)
 
 # FONTSET - X fontset support for output of languages with many characters.
 # Uncomment this when you want to output a multibyte language.
-#CONF_OPT_OUTPUT = --enable-fontset
+CONF_OPT_OUTPUT = --enable-fontset
 
 # ACL - Uncomment this when you do not want to include ACL support, even
 # though your system does support it.  E.g., when it's buggy.
@@ -538,10 +539,10 @@ CClink = $(CC)
 #CONF_OPT_FEAT = --with-features=small
 #CONF_OPT_FEAT = --with-features=normal
 #CONF_OPT_FEAT = --with-features=big
-#CONF_OPT_FEAT = --with-features=huge
+CONF_OPT_FEAT = --with-features=huge
 
 # COMPILED BY - For including a specific e-mail address for ":version".
-#CONF_OPT_COMPBY = "--with-compiledby=John Doe <JohnDoe@yahoo.com>"
+CONF_OPT_COMPBY = "--with-compiledby=Joshua Zink-Duda <zinkdudajoshua@gmail.com>"
 
 # X WINDOWS DISABLE - For creating a plain Vim without any X11 related fancies
 # (otherwise Vim configure will try to include xterm titlebar access)
@@ -573,7 +574,7 @@ CClink = $(CC)
 #CONF_OPT_XSMP = --disable-xsmp-interact
 
 # If you want to always automatically add a servername, also in the terminal.
-#CONF_OPT_AUTOSERVE = --enable-autoservername
+CONF_OPT_AUTOSERVE = --enable-autoservername
 
 # COMPILER - Name of the compiler {{{1
 # The default from configure will mostly be fine, no need to change this, just
