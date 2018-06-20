@@ -67,14 +67,19 @@ if !exists('termdebugger')
 endif
 
 let s:pc_id = 12
-let s:break_id = 13
+let s:break_id = 13  " breakpoint number is added to this
 let s:stopped = 1
 
-if &background == 'light'
-  hi default debugPC term=reverse ctermbg=lightblue guibg=lightblue
-else
-  hi default debugPC term=reverse ctermbg=darkblue guibg=darkblue
-endif
+func s:Highlight(init, old, new)
+  let default = a:init ? 'default ' : ''
+  if a:new ==# 'light' && a:old !=# 'light'
+    exe "hi " . default . "debugPC term=reverse ctermbg=lightblue guibg=lightblue"
+  elseif a:new ==# 'dark' && a:old !=# 'dark'
+    exe "hi " . default . "debugPC term=reverse ctermbg=darkblue guibg=darkblue"
+  endif
+endfunc
+
+call s:Highlight(1, '', &background)
 hi default debugBreakpoint term=reverse ctermbg=red guibg=red
 
 func s:StartDebug(bang, ...)
@@ -325,10 +330,6 @@ func s:StartDebugCommon(dict)
   " There can be only one.
   sign define debugPC linehl=debugPC
 
-  " Sign used to indicate a breakpoint.
-  " Can be used multiple times.
-  sign define debugBreakpoint text=>> texthl=debugBreakpoint
-
   " Install debugger commands in the text window.
   call win_gotoid(s:sourcewin)
   call s:InstallCommands()
@@ -345,11 +346,13 @@ func s:StartDebugCommon(dict)
     endif
   endif
 
+  " Contains breakpoints that have been placed, key is the number.
   let s:breakpoints = {}
 
   augroup TermDebug
     au BufRead * call s:BufRead()
     au BufUnload * call s:BufUnloaded()
+    au OptionSet background call s:Highlight(0, v:option_old, v:option_new)
   augroup END
 
   " Run the command if the bang attribute was given and got to the debug
@@ -405,7 +408,7 @@ func s:GdbOutCallback(channel, text)
 
   " Drop the gdb prompt, we have our own.
   " Drop status and echo'd commands.
-  if a:text == '(gdb) ' || a:text == '^done' || a:text[0] == '&' || a:text[0] == '='
+  if a:text == '(gdb) ' || a:text == '^done' || a:text[0] == '&'
     return
   endif
   if a:text =~ '^^error,msg='
@@ -436,7 +439,7 @@ endfunc
 " to the next ", unescaping characters.
 func s:DecodeMessage(quotedText)
   if a:quotedText[0] != '"'
-    echoerr 'DecodeMessage(): missing quote'
+    echoerr 'DecodeMessage(): missing quote in ' . a:quotedText
     return
   endif
   let result = ''
@@ -454,6 +457,16 @@ func s:DecodeMessage(quotedText)
     let i += 1
   endwhile
   return result
+endfunc
+
+" Extract the "name" value from a gdb message with fullname="name".
+func s:GetFullname(msg)
+  let name = s:DecodeMessage(substitute(a:msg, '.*fullname=', '', ''))
+  if has('win32') && name =~ ':\\\\'
+    " sometimes the name arrives double-escaped
+    let name = substitute(name, '\\\\', '\\', 'g')
+  endif
+  return name
 endfunc
 
 func s:EndTermDebug(job, status)
@@ -636,9 +649,13 @@ func s:DeleteCommands()
   for key in keys(s:breakpoints)
     exe 'sign unplace ' . (s:break_id + key)
   endfor
-  sign undefine debugPC
-  sign undefine debugBreakpoint
   unlet s:breakpoints
+
+  sign undefine debugPC
+  for val in s:BreakpointSigns
+    exe "sign undefine debugBreakpoint" . val
+  endfor
+  unlet s:BreakpointSigns
 endfunc
 
 " :Break - Set a breakpoint at the cursor position.
@@ -657,8 +674,9 @@ func s:SetBreakpoint()
     endif
     sleep 10m
   endif
-  call s:SendCommand('-break-insert --source '
-	\ . fnameescape(expand('%:p')) . ' --line ' . line('.'))
+  " Use the fname:lnum format, older gdb can't handle --source.
+  call s:SendCommand('-break-insert '
+	\ . fnameescape(expand('%:p')) . ':' . line('.'))
   if do_continue
     call s:SendCommand('-exec-continue')
   endif
@@ -787,7 +805,11 @@ func s:HandleCursor(msg)
 
   call s:GotoSourcewinOrCreateIt()
 
-  let fname = substitute(a:msg, '.*fullname="\([^"]*\)".*', '\1', '')
+  if a:msg =~ 'fullname='
+    let fname = s:GetFullname(a:msg)
+  else
+    let fname = ''
+  endif
   if a:msg =~ '^\(\*stopped\|=thread-selected\)' && filereadable(fname)
     let lnum = substitute(a:msg, '.*line="\([^"]*\)".*', '\1', '')
     if lnum =~ '^[0-9]*$'
@@ -813,6 +835,15 @@ func s:HandleCursor(msg)
   call win_gotoid(wid)
 endfunc
 
+let s:BreakpointSigns = []
+
+func s:CreateBreakpoint(nr)
+  if index(s:BreakpointSigns, a:nr) == -1
+    call add(s:BreakpointSigns, a:nr)
+    exe "sign define debugBreakpoint" . a:nr . " text=" . a:nr . " texthl=debugBreakpoint"
+  endif
+endfunc
+
 " Handle setting a breakpoint
 " Will update the sign that shows the breakpoint
 func s:HandleNewBreakpoint(msg)
@@ -820,6 +851,7 @@ func s:HandleNewBreakpoint(msg)
   if nr == 0
     return
   endif
+  call s:CreateBreakpoint(nr)
 
   if has_key(s:breakpoints, nr)
     let entry = s:breakpoints[nr]
@@ -828,7 +860,7 @@ func s:HandleNewBreakpoint(msg)
     let s:breakpoints[nr] = entry
   endif
 
-  let fname = substitute(a:msg, '.*fullname="\([^"]*\)".*', '\1', '')
+  let fname = s:GetFullname(a:msg)
   let lnum = substitute(a:msg, '.*line="\([^"]*\)".*', '\1', '')
   let entry['fname'] = fname
   let entry['lnum'] = lnum
@@ -839,7 +871,7 @@ func s:HandleNewBreakpoint(msg)
 endfunc
 
 func s:PlaceSign(nr, entry)
-  exe 'sign place ' . (s:break_id + a:nr) . ' line=' . a:entry['lnum'] . ' name=debugBreakpoint file=' . a:entry['fname']
+  exe 'sign place ' . (s:break_id + a:nr) . ' line=' . a:entry['lnum'] . ' name=debugBreakpoint' . a:nr . ' file=' . a:entry['fname']
   let a:entry['placed'] = 1
 endfunc
 
@@ -879,4 +911,3 @@ func s:BufUnloaded()
     endif
   endfor
 endfunc
-
