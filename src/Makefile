@@ -574,7 +574,7 @@ CONF_OPT_COMPBY = "--with-compiledby=Joshua Zink-Duda <zinkdudajoshua@gmail.com>
 #CONF_OPT_XSMP = --disable-xsmp-interact
 
 # If you want to always automatically add a servername, also in the terminal.
-CONF_OPT_AUTOSERVE = --enable-autoservername
+# CONF_OPT_AUTOSERVE = --enable-autoservername
 
 # COMPILER - Name of the compiler {{{1
 # The default from configure will mostly be fine, no need to change this, just
