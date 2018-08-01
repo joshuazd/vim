@@ -464,6 +464,18 @@ func Test_mode()
   call assert_equal('n', mode(0))
   call assert_equal('n', mode(1))
 
+  " i_CTRL-O
+  exe "normal i\<C-O>:call Save_mode()\<Cr>\<Esc>"
+  call assert_equal("n-niI", g:current_modes)
+
+  " R_CTRL-O
+  exe "normal R\<C-O>:call Save_mode()\<Cr>\<Esc>"
+  call assert_equal("n-niR", g:current_modes)
+
+  " gR_CTRL-O
+  exe "normal gR\<C-O>:call Save_mode()\<Cr>\<Esc>"
+  call assert_equal("n-niV", g:current_modes)
+
   " How to test operator-pending mode?
 
   call feedkeys("v", 'xt')
@@ -808,6 +820,17 @@ func Test_col()
   call assert_equal(0, col([1, 100]))
   call assert_equal(0, col([1]))
   bw!
+endfunc
+
+func Test_inputlist()
+  call feedkeys(":let c = inputlist(['Select color:', '1. red', '2. green', '3. blue'])\<cr>1\<cr>", 'tx')
+  call assert_equal(1, c)
+  call feedkeys(":let c = inputlist(['Select color:', '1. red', '2. green', '3. blue'])\<cr>2\<cr>", 'tx')
+  call assert_equal(2, c)
+  call feedkeys(":let c = inputlist(['Select color:', '1. red', '2. green', '3. blue'])\<cr>3\<cr>", 'tx')
+  call assert_equal(3, c)
+
+  call assert_fails('call inputlist("")', 'E686:')
 endfunc
 
 func Test_balloon_show()
