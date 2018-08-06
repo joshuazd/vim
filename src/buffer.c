@@ -4229,7 +4229,7 @@ build_stl_str_hl(
 
 #ifdef FEAT_EVAL
 	    vim_snprintf((char *)tmp, sizeof(tmp), "%d", curbuf->b_fnum);
-	    set_internal_string_var((char_u *)"actual_curbuf", tmp);
+	    set_internal_string_var((char_u *)"g:actual_curbuf", tmp);
 
 	    save_curbuf = curbuf;
 	    save_curwin = curwin;
@@ -5625,6 +5625,15 @@ write_viminfo_bufferlist(FILE *fp)
     vim_free(line);
 }
 #endif
+
+/*
+ * Return TRUE if "buf" is a normal buffer, 'buftype' is empty.
+ */
+    int
+bt_normal(buf_T *buf)
+{
+    return buf != NULL && buf->b_p_bt[0] == NUL;
+}
 
 /*
  * Return TRUE if "buf" is the quickfix buffer.
