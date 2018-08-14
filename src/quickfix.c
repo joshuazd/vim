@@ -1506,7 +1506,6 @@ qf_list_empty(qf_info_T *qi, int qf_idx)
     return qi->qf_lists[qf_idx].qf_count <= 0;
 }
 
-
 /*
  * Allocate the fields used for parsing lines and populating a quickfix list.
  */
@@ -2012,13 +2011,9 @@ ll_new_list(void)
 {
     qf_info_T *qi;
 
-    qi = (qf_info_T *)alloc((unsigned)sizeof(qf_info_T));
+    qi = (qf_info_T *)alloc_clear((unsigned)sizeof(qf_info_T));
     if (qi != NULL)
-    {
-	vim_memset(qi, 0, (size_t)(sizeof(qf_info_T)));
 	qi->qf_refcount++;
-    }
-
     return qi;
 }
 
@@ -3717,7 +3712,7 @@ qf_view_result(int split)
     if (IS_LL_WINDOW(curwin))
 	qi = GET_LOC_LIST(curwin);
 
-    if (qi == NULL || qi->qf_lists[qi->qf_curlist].qf_count == 0)
+    if (qf_list_empty(qi, qi->qf_curlist))
     {
 	EMSG(_(e_quickfix));
 	return;
@@ -4340,16 +4335,39 @@ qf_id2nr(qf_info_T *qi, int_u qfid)
 }
 
 /*
+ * If the current list is not "save_qfid" and we can find the list with that ID
+ * then make it the current list.
+ * This is used when autocommands may have changed the current list.
+ * Returns OK if successfully restored the list. Returns FAIL if the list with
+ * the specified identifier (save_qfid) is not found in the stack.
+ */
+    static int
+qf_restore_list(qf_info_T *qi, int_u save_qfid)
+{
+    int curlist;
+
+    if (qi->qf_lists[qi->qf_curlist].qf_id != save_qfid)
+    {
+	curlist = qf_id2nr(qi, save_qfid);
+	if (curlist < 0)
+	    // list is not present
+	    return FAIL;
+	qi->qf_curlist = curlist;
+    }
+    return OK;
+}
+
+/*
  * Jump to the first entry if there is one.
  */
     static void
 qf_jump_first(qf_info_T *qi, int_u save_qfid, int forceit)
 {
-    // If autocommands changed the current list, then restore it
-    if (qi->qf_lists[qi->qf_curlist].qf_id != save_qfid)
-	qi->qf_curlist = qf_id2nr(qi, save_qfid);
+    if (qf_restore_list(qi, save_qfid) == FAIL)
+	return;
 
-    if (qi->qf_lists[qi->qf_curlist].qf_count > 0)
+    // Autocommands might have cleared the list, check for that.
+    if (!qf_list_empty(qi, qi->qf_curlist))
 	qf_jump(qi, 0, 0, forceit);
 }
 
@@ -4873,10 +4891,8 @@ ex_cfile(exarg_T *eap)
     // free the list.
     if (res > 0 && (eap->cmdidx == CMD_cfile || eap->cmdidx == CMD_lfile)
 	    && qflist_valid(wp, save_qfid))
-    {
 	// display the first error
 	qf_jump_first(qi, save_qfid, eap->forceit);
-    }
 }
 
 /*
@@ -5014,10 +5030,8 @@ vgr_qflist_valid(
 	}
     }
 
-    if (qi->qf_lists[qi->qf_curlist].qf_id != qfid)
-	/* Autocommands changed the quickfix list.  Find the one we were
-	 * using and restore it. */
-	qi->qf_curlist = qf_id2nr(qi, qfid);
+    if (qf_restore_list(qi, qfid) == FAIL)
+	return FALSE;
 
     return TRUE;
 }
@@ -5363,9 +5377,8 @@ ex_vimgrep(exarg_T *eap)
     if (!qflist_valid(wp, save_qfid))
 	goto theend;
 
-    // If autocommands changed the current list, then restore it
-    if (qi->qf_lists[qi->qf_curlist].qf_id != save_qfid)
-	qi->qf_curlist = qf_id2nr(qi, save_qfid);
+    if (qf_restore_list(qi, save_qfid) == FAIL)
+	goto theend;
 
     /* Jump to first match. */
     if (!qf_list_empty(qi, qi->qf_curlist))
@@ -5686,12 +5699,9 @@ qf_get_list_from_lines(dict_T *what, dictitem_T *di, dict_T *retdict)
 	if (l == NULL)
 	    return FAIL;
 
-	qi = (qf_info_T *)alloc((unsigned)sizeof(qf_info_T));
+	qi = ll_new_list();
 	if (qi != NULL)
 	{
-	    vim_memset(qi, 0, (size_t)(sizeof(qf_info_T)));
-	    qi->qf_refcount++;
-
 	    if (qf_init_ext(qi, 0, NULL, NULL, &di->di_tv, errorformat,
 			TRUE, (linenr_T)0, (linenr_T)0, NULL, NULL) > 0)
 	    {
@@ -6581,10 +6591,8 @@ ex_cbuffer(exarg_T *eap)
 	    if (res > 0 && (eap->cmdidx == CMD_cbuffer ||
 						eap->cmdidx == CMD_lbuffer)
 		    && qflist_valid(wp, save_qfid))
-	    {
 		// display the first error
 		qf_jump_first(qi, save_qfid, eap->forceit);
-	    }
 	}
     }
 }
@@ -6661,10 +6669,8 @@ ex_cexpr(exarg_T *eap)
 	    if (res > 0 && (eap->cmdidx == CMD_cexpr
 						   || eap->cmdidx == CMD_lexpr)
 		    && qflist_valid(wp, save_qfid))
-	    {
 		// display the first error
 		qf_jump_first(qi, save_qfid, eap->forceit);
-	    }
 	}
 	else
 	    EMSG(_("E777: String or List expected"));
