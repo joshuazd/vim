@@ -364,12 +364,12 @@ CONF_ARGS = --exec-prefix=/usr
 # GTK+ 3.
 #
 # If the selected GUI isn't found, the GUI is disabled automatically
-CONF_OPT_GUI = --enable-gui=yes
+#CONF_OPT_GUI = --enable-gui=yes
 #CONF_OPT_GUI = --enable-gui=gtk2
 #CONF_OPT_GUI = --enable-gui=gtk2 --disable-gtktest
 #CONF_OPT_GUI = --enable-gui=gnome2
 #CONF_OPT_GUI = --enable-gui=gnome2 --disable-gtktest
-#CONF_OPT_GUI = --enable-gui=gtk3
+CONF_OPT_GUI = --enable-gui=gtk3
 #CONF_OPT_GUI = --enable-gui=gtk3 --disable-gtktest
 #CONF_OPT_GUI = --enable-gui=motif
 #CONF_OPT_GUI = --enable-gui=motif --with-motif-lib="-static -lXm -shared"
@@ -1007,6 +1007,7 @@ TOOLS = xxd/xxd$(EXEEXT)
 #
 # Uncomment the next line to install Vim in your home directory.
 #prefix = $(HOME)
+prefix = /usr
 
 ### exec_prefix	is the top directory for the executable (default $(prefix))
 #
