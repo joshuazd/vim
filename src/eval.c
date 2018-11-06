@@ -232,7 +232,6 @@ static int eval5(char_u **arg, typval_T *rettv, int evaluate);
 static int eval6(char_u **arg, typval_T *rettv, int evaluate, int want_string);
 static int eval7(char_u **arg, typval_T *rettv, int evaluate, int want_string);
 
-static int eval_index(char_u **arg, typval_T *rettv, int evaluate, int verbose);
 static int get_string_tv(char_u **arg, typval_T *rettv, int evaluate);
 static int get_lit_string_tv(char_u **arg, typval_T *rettv, int evaluate);
 static int free_unref_items(int copyID);
@@ -860,9 +859,9 @@ eval_to_string_safe(
     int		use_sandbox)
 {
     char_u	*retval;
-    void	*save_funccalp;
+    funccal_entry_T funccal_entry;
 
-    save_funccalp = save_funccal();
+    save_funccal(&funccal_entry);
     if (use_sandbox)
 	++sandbox;
     ++textlock;
@@ -870,7 +869,7 @@ eval_to_string_safe(
     if (use_sandbox)
 	--sandbox;
     --textlock;
-    restore_funccal(save_funccalp);
+    restore_funccal();
     return retval;
 }
 
@@ -1426,6 +1425,7 @@ list_hashtable_vars(
     hashitem_T	*hi;
     dictitem_T	*di;
     int		todo;
+    char_u	buf[IOSIZE];
 
     todo = (int)ht->ht_used;
     for (hi = ht->ht_array; todo > 0 && !got_int; ++hi)
@@ -1434,6 +1434,13 @@ list_hashtable_vars(
 	{
 	    --todo;
 	    di = HI2DI(hi);
+
+	    // apply :filter /pat/ to variable name
+	    vim_strncpy((char_u *) buf, prefix, IOSIZE - 1);
+	    vim_strcat((char_u *) buf, di->di_key, IOSIZE);
+	    if (message_filtered(buf))
+		continue;
+
 	    if (empty || di->di_tv.v_type != VAR_STRING
 					   || di->di_tv.vval.v_string != NULL)
 		list_one_var(di, prefix, first);
@@ -3049,8 +3056,6 @@ del_menutrans_vars(void)
  * with its prefix. Allocated in cat_prefix_varname(), freed later in
  * get_user_var_name().
  */
-
-static char_u *cat_prefix_varname(int prefix, char_u *name);
 
 static char_u	*varnamebuf = NULL;
 static int	varnamebuflen = 0;
@@ -7957,6 +7962,7 @@ get_user_input(
 	if (defstr != NULL)
 	{
 	    int save_ex_normal_busy = ex_normal_busy;
+
 	    ex_normal_busy = 0;
 	    rettv->vval.v_string =
 		getcmdline_prompt(secret ? NUL : '@', p, echo_attr,
@@ -8195,9 +8201,7 @@ find_win_by_nr(
     tabpage_T	*tp)	/* NULL for current tab page */
 {
     win_T	*wp;
-    int		nr;
-
-    nr = (int)get_tv_number_chk(vp, NULL);
+    int		nr = (int)get_tv_number_chk(vp, NULL);
 
     if (nr < 0)
 	return NULL;
@@ -8217,6 +8221,20 @@ find_win_by_nr(
     if (nr >= LOWEST_WIN_ID)
 	return NULL;
     return wp;
+}
+
+/*
+ * Find a window: When using a Window ID in any tab page, when using a number
+ * in the current tab page.
+ */
+    win_T *
+find_win_by_nr_or_id(typval_T *vp)
+{
+    int	nr = (int)get_tv_number_chk(vp, NULL);
+
+    if (nr >= LOWEST_WIN_ID)
+	return win_id2wp(vp);
+    return find_win_by_nr(vp, NULL);
 }
 
 /*
@@ -8507,8 +8525,6 @@ typedef enum
     VAR_FLAVOUR_VIMINFO		/* all uppercase */
 } var_flavour_T;
 
-static var_flavour_T var_flavour(char_u *varname);
-
     static var_flavour_T
 var_flavour(char_u *varname)
 {
@@ -8536,7 +8552,7 @@ read_viminfo_varlist(vir_T *virp, int writing)
     char_u	*tab;
     int		type = VAR_NUMBER;
     typval_T	tv;
-    void	*save_funccal;
+    funccal_entry_T funccal_entry;
 
     if (!writing && (find_viminfo_parameter('!') != NULL))
     {
@@ -8585,9 +8601,9 @@ read_viminfo_varlist(vir_T *virp, int writing)
 		}
 
 		/* when in a function use global variables */
-		save_funccal = clear_current_funccal();
+		save_funccal(&funccal_entry);
 		set_var(virp->vir_line + 1, &tv, FALSE);
-		restore_current_funccal(save_funccal);
+		restore_funccal();
 
 		if (tv.v_type == VAR_STRING)
 		    vim_free(tv.vval.v_string);
@@ -9045,6 +9061,8 @@ assert_fails(typval_T *argvars)
     char_u	*cmd = get_tv_string_chk(&argvars[0]);
     garray_T	ga;
     int		ret = 0;
+    char_u	numbuf[NUMBUFLEN];
+    char_u	*tofree;
 
     called_emsg = FALSE;
     suppress_errthrow = TRUE;
@@ -9054,7 +9072,14 @@ assert_fails(typval_T *argvars)
     {
 	prepare_assert_error(&ga);
 	ga_concat(&ga, (char_u *)"command did not fail: ");
-	ga_concat(&ga, cmd);
+	if (argvars[1].v_type != VAR_UNKNOWN
+					   && argvars[2].v_type != VAR_UNKNOWN)
+	{
+	    ga_concat(&ga, echo_string(&argvars[2], &tofree, numbuf, 0));
+	    vim_free(tofree);
+	}
+	else
+	    ga_concat(&ga, cmd);
 	assert_error(&ga);
 	ga_clear(&ga);
 	ret = 1;
@@ -9431,9 +9456,6 @@ var_exists(char_u *var)
 /*
  * Functions for ":8" filename modifier: get 8.3 version of a filename.
  */
-static int get_short_pathname(char_u **fnamep, char_u **bufp, int *fnamelen);
-static int shortpath_for_invalid_fname(char_u **fname, char_u **bufp, int *fnamelen);
-static int shortpath_for_partial(char_u **fnamep, char_u **bufp, int *fnamelen);
 
 /*
  * Get the short path (8.3) for the filename in "fnamep".
