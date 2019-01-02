@@ -317,15 +317,15 @@ CClink = $(CC)
 # You can give a lot of options to configure.
 # Change this to your desire and do 'make config' afterwards
 
-# examples (can only use one!):
+# examples:
 CONF_ARGS = --exec-prefix=/usr
-#CONF_ARGS = --with-vim-name=vim7 --with-ex-name=ex7 --with-view-name=view7
-#CONF_ARGS = --with-global-runtime=/etc/vim
-#CONF_ARGS = --with-local-dir=/usr/share
-#CONF_ARGS = --without-local-dir
+#CONF_ARGS2 = --with-vim-name=vim8 --with-ex-name=ex8 --with-view-name=view8
+#CONF_ARGS3 = --with-global-runtime=/etc/vim,/usr/share/vim
+#CONF_ARGS4 = --with-local-dir=/usr/share
+#CONF_ARGS5 = --without-local-dir
 
 # Use this one if you distribute a modified version of Vim.
-#CONF_ARGS = --with-modified-by="John Doe"
+#CONF_ARGS6 = --with-modified-by="John Doe"
 
 # GUI - For creating Vim with GUI (gvim) (B)
 # Uncomment this line when you don't want to get the GUI version, although you
@@ -1575,8 +1575,6 @@ include Make_all.mak
 #	   ALL_GUI_SRC: all GUI files for Unix
 #
 #		   SRC: files used for current configuration
-#	      TAGS_SRC: source files used for make tags
-#	     TAGS_INCL: include files used for make tags
 #	       ALL_SRC: source files used for make depend and make lint
 
 BASIC_SRC = \
@@ -1630,6 +1628,7 @@ BASIC_SRC = \
 	screen.c \
 	search.c \
 	sha256.c \
+	sign.c \
 	spell.c \
 	spellfile.c \
 	syntax.c \
@@ -1657,9 +1656,6 @@ SRC =	$(BASIC_SRC) \
 	$(RUBY_SRC) \
 	$(WORKSHOP_SRC) \
 	$(WSDEBUG_SRC)
-
-TAGS_SRC = *.c *.cpp $(PERL_SRC) $(TERM_SRC) $(XDIFF_SRC)
-TAGS_INCL = *.h $(TERM_DEPS) $(XDIFF_INCL)
 
 EXTRA_SRC = hangulin.c if_lua.c if_mzsch.c auto/if_perl.c if_perlsfio.c \
 	    if_python.c if_python3.c if_tcl.c if_ruby.c \
@@ -1743,6 +1739,7 @@ OBJ_COMMON = \
 	objects/screen.o \
 	objects/search.o \
 	objects/sha256.o \
+	objects/sign.o \
 	objects/spell.o \
 	objects/spellfile.o \
 	objects/syntax.o \
@@ -1877,6 +1874,7 @@ PRO_AUTO = \
 	screen.pro \
 	search.pro \
 	sha256.pro \
+	sign.pro \
 	spell.pro \
 	spellfile.pro \
 	syntax.pro \
@@ -1939,7 +1937,9 @@ config auto/config.mk: auto/configure config.mk.in config.h.in
 		$(CONF_OPT_FEAT) $(CONF_TERM_LIB) \
 		$(CONF_OPT_COMPBY) $(CONF_OPT_ACL) $(CONF_OPT_NETBEANS) \
 		$(CONF_OPT_CHANNEL) $(CONF_OPT_TERMINAL) \
-		$(CONF_ARGS) $(CONF_OPT_MZSCHEME) $(CONF_OPT_PLTHOME) \
+		$(CONF_ARGS) $(CONF_ARGS1) $(CONF_ARGS2) $(CONF_ARGS3) \
+		$(CONF_ARGS4) $(CONF_ARGS5) $(CONF_ARGS6) \
+		$(CONF_OPT_MZSCHEME) $(CONF_OPT_PLTHOME) \
 		$(CONF_OPT_LUA) $(CONF_OPT_LUA_PREFIX) \
 		$(CONF_OPT_SYSMOUSE); \
 	fi
@@ -2096,12 +2096,12 @@ notags:
 #	Motif and Athena GUI
 # You can ignore error messages for missing files.
 tags TAGS: notags
-	$(TAGPRG) $(TAGS_SRC) $(TAGS_INCL)
+	$(TAGPRG) $(TAGS_FILES)
 
 # Make a highlight file for types.  Requires Exuberant ctags and awk
 types: types.vim
-types.vim: $(TAGS_SRC) $(TAGS_INCL)
-	ctags --c-kinds=gstu -o- $(TAGS_SRC) $(TAGS_INCL) |\
+types.vim: $(TAGS_FILES)
+	ctags --c-kinds=gstu -o- $(TAGS_FILES) |\
 		awk 'BEGIN{printf("syntax keyword Type\t")}\
 			{printf("%s ", $$1)}END{print ""}' > $@
 	echo "syn keyword Constant OK FAIL TRUE FALSE MAYBE" >> $@
@@ -3205,6 +3205,9 @@ objects/search.o: search.c
 objects/sha256.o: sha256.c
 	$(CCC) -o $@ sha256.c
 
+objects/sign.o: sign.c
+	$(CCC) -o $@ sign.c
+
 objects/spell.o: spell.c
 	$(CCC) -o $@ spell.c
 
@@ -3588,6 +3591,10 @@ objects/search.o: search.c vim.h protodef.h auto/config.h feature.h os_unix.h \
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
  proto.h globals.h farsi.h arabic.h
 objects/sha256.o: sha256.c vim.h protodef.h auto/config.h feature.h os_unix.h \
+ auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
+ proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
+ proto.h globals.h farsi.h arabic.h
+objects/sign.o: sign.c vim.h protodef.h auto/config.h feature.h os_unix.h \
  auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
  proto.h globals.h farsi.h arabic.h

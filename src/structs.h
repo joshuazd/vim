@@ -705,7 +705,7 @@ typedef struct memline
  */
 typedef struct textprop_S
 {
-    colnr_T	tp_col;		// start column
+    colnr_T	tp_col;		// start column (one based, in bytes)
     colnr_T	tp_len;		// length in bytes
     int		tp_id;		// identifier
     int		tp_type;	// property type
@@ -731,8 +731,14 @@ typedef struct proptype_S
 #define PT_FLAG_INS_START_INCL	1	// insert at start included in property
 #define PT_FLAG_INS_END_INCL	2	// insert at end included in property
 
+// Sign group
+typedef struct signgroup_S
+{
+    short_u	refcount;		// number of signs in this group
+    int		next_sign_id;		// next sign id for this group
+    char_u	sg_name[1];		// sign group name
+} signgroup_T;
 
-#if defined(FEAT_SIGNS) || defined(PROTO)
 typedef struct signlist signlist_T;
 
 struct signlist
@@ -740,9 +746,19 @@ struct signlist
     int		id;		/* unique identifier for each placed sign */
     linenr_T	lnum;		/* line number which has this sign */
     int		typenr;		/* typenr of sign */
+    signgroup_T	*group;		/* sign group */
+    int		priority;	/* priority for highlighting */
     signlist_T	*next;		/* next signlist entry */
     signlist_T  *prev;		/* previous entry -- for easy reordering */
 };
+
+#if defined(FEAT_SIGNS) || defined(PROTO)
+// Macros to get the sign group structure from the group name
+#define SGN_KEY_OFF	offsetof(signgroup_T, sg_name)
+#define HI2SG(hi)	((signgroup_T *)((hi)->hi_key - SGN_KEY_OFF))
+
+// Default sign priority for highlighting
+#define SIGN_DEF_PRIO	10
 
 /* type argument for buf_getsigntype() */
 #define SIGN_ANY	0
@@ -2395,7 +2411,8 @@ struct file_buffer
     dict_T	*b_vars;	/* internal variables, local to buffer */
 #endif
 #ifdef FEAT_TEXT_PROP
-    hashtab_T	*b_proptypes;	/* text property types local to buffer */
+    int		b_has_textprop;	// TRUE when text props were added
+    hashtab_T	*b_proptypes;	// text property types local to buffer
 #endif
 
 #if defined(FEAT_BEVAL) && defined(FEAT_EVAL)
@@ -3247,6 +3264,7 @@ typedef struct
     int		use_aucmd_win;	/* using aucmd_win */
     win_T	*save_curwin;	/* saved curwin */
     win_T	*new_curwin;	/* new curwin */
+    win_T	*save_prevwin;	/* saved prevwin */
     bufref_T	new_curbuf;	/* new curbuf */
     char_u	*globaldir;	/* saved value of globaldir */
 } aco_save_T;

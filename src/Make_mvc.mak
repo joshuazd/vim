@@ -749,6 +749,7 @@ OBJ = \
 	$(OUTDIR)\screen.obj \
 	$(OUTDIR)\search.obj \
 	$(OUTDIR)\sha256.obj \
+	$(OUTDIR)\sign.obj \
 	$(OUTDIR)\spell.obj \
 	$(OUTDIR)\spellfile.obj \
 	$(OUTDIR)\syntax.obj \
@@ -1270,8 +1271,7 @@ GvimExt/gvimext.dll: GvimExt/gvimext.cpp GvimExt/gvimext.rc GvimExt/gvimext.h
 
 
 tags: notags
-	$(CTAGS) *.c *.cpp *.h
-	if exist auto\if_perl.c $(CTAGS) --append=yes auto\if_perl.c
+	$(CTAGS) $(TAGS_FILES)
 
 notags:
 	- if exist tags del tags
@@ -1520,6 +1520,8 @@ $(OUTDIR)/search.obj:	$(OUTDIR) search.c  $(INCL)
 
 $(OUTDIR)/sha256.obj:	$(OUTDIR) sha256.c  $(INCL)
 
+$(OUTDIR)/sign.obj:	$(OUTDIR) sign.c  $(INCL)
+
 $(OUTDIR)/spell.obj:	$(OUTDIR) spell.c  $(INCL)
 
 $(OUTDIR)/spellfile.obj:	$(OUTDIR) spellfile.c  $(INCL)
@@ -1665,6 +1667,7 @@ proto.h: \
 	proto/screen.pro \
 	proto/search.pro \
 	proto/sha256.pro \
+	proto/sign.pro \
 	proto/spell.pro \
 	proto/spellfile.pro \
 	proto/syntax.pro \

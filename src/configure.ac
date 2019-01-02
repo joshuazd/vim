@@ -345,9 +345,15 @@ AC_ARG_WITH(view-name, [  --with-view-name=NAME   what to call the View executab
 AC_SUBST(VIEWNAME)
 
 AC_MSG_CHECKING(--with-global-runtime argument)
-AC_ARG_WITH(global-runtime, [  --with-global-runtime=DIR    global runtime directory in 'runtimepath'],
-	AC_MSG_RESULT($withval); AC_DEFINE_UNQUOTED(RUNTIME_GLOBAL, "$withval"),
+AC_ARG_WITH(global-runtime, [  --with-global-runtime=DIR    global runtime directory in 'runtimepath', comma-separated for multiple directories],
+	RUNTIME_GLOBAL="$withval"; AC_MSG_RESULT($withval),
 	AC_MSG_RESULT(no))
+
+if test "X$RUNTIME_GLOBAL" != "X"; then
+  RUNTIME_GLOBAL_AFTER=$(printf -- "$RUNTIME_GLOBAL\\n" | $AWK -F, 'BEGIN { comma=0 } { for (i = NF; i > 0; i--) { if (comma) { printf ",%s/after", $i } else { printf "%s/after", $i; comma=1 } } } END { printf "\n" }')
+  AC_DEFINE_UNQUOTED(RUNTIME_GLOBAL, "$RUNTIME_GLOBAL")
+  AC_DEFINE_UNQUOTED(RUNTIME_GLOBAL_AFTER, "$RUNTIME_GLOBAL_AFTER")
+fi
 
 AC_MSG_CHECKING(--with-modified-by argument)
 AC_ARG_WITH(modified-by, [  --with-modified-by=NAME       name of who modified a release version],
@@ -2360,8 +2366,8 @@ if test "x$QNX" = "xyes" -a "x$with_x" = "xno" ; then
   case "$enable_gui_canon" in
     no)		AC_MSG_RESULT(no GUI support)
 		SKIP_PHOTON=YES ;;
-    yes|"")	AC_MSG_RESULT(yes - automatic GUI support) ;;
-    auto)	AC_MSG_RESULT(auto - automatic GUI support) ;;
+    yes|""|auto) AC_MSG_RESULT(automatic GUI support)
+    		gui_auto=yes ;;
     photon)	AC_MSG_RESULT(Photon GUI support) ;;
     *)		AC_MSG_RESULT([Sorry, $enable_gui GUI is not supported])
 		SKIP_PHOTON=YES ;;
@@ -2372,7 +2378,8 @@ elif test "x$MACOS_X" = "xyes" -a "x$with_x" = "xno" ; then
   case "$enable_gui_canon" in
     no)		AC_MSG_RESULT(no GUI support)
 		SKIP_CARBON=YES ;;
-    yes|"")	AC_MSG_RESULT(yes - automatic GUI support) ;;
+    yes|"")	AC_MSG_RESULT(yes - automatic GUI support)
+    		gui_auto=yes ;;
     auto)	AC_MSG_RESULT(auto - Carbon GUI is outdated - disable GUI support)
 		SKIP_CARBON=YES ;;
     carbon)	AC_MSG_RESULT(Carbon GUI support) ;;
@@ -2385,6 +2392,7 @@ else
   case "$enable_gui_canon" in
     no|none)	AC_MSG_RESULT(no GUI support) ;;
     yes|""|auto)	AC_MSG_RESULT(yes/auto - automatic GUI support)
+		gui_auto=yes
 		SKIP_GTK2=
 		SKIP_GNOME=
 		SKIP_MOTIF=
@@ -2632,6 +2640,9 @@ return 1;
       GTK_CFLAGS=""
       GTK_LIBS=""
       ifelse([$3], , :, [$3])
+      if test "$fail_if_missing" = "yes" -a "X$gui_auto" != "Xyes"; then
+	AC_MSG_ERROR([could not configure GTK])
+      fi
     }
     fi
   }
