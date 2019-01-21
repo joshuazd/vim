@@ -2307,35 +2307,6 @@ theend:
     return ret;
 }
 
-/*
- * Called when a job has finished.
- * This updates the title and status, but does not close the vterm, because
- * there might still be pending output in the channel.
- */
-    void
-term_job_ended(job_T *job)
-{
-    term_T *term;
-    int	    did_one = FALSE;
-
-    for (term = first_term; term != NULL; term = term->tl_next)
-	if (term->tl_job == job)
-	{
-	    VIM_CLEAR(term->tl_title);
-	    VIM_CLEAR(term->tl_status_text);
-	    redraw_buf_and_status_later(term->tl_buffer, VALID);
-	    did_one = TRUE;
-	}
-    if (did_one)
-	redraw_statuslines();
-    if (curbuf->b_term != NULL)
-    {
-	if (curbuf->b_term->tl_job == job)
-	    maketitle();
-	update_cursor(curbuf->b_term, TRUE);
-    }
-}
-
     static void
 may_toggle_cursor(term_T *term)
 {
@@ -3072,7 +3043,7 @@ update_system_term(term_T *term)
 
 	p_more = FALSE;
 	msg_row = Rows - 1;
-	msg_puts((char_u *)"\n");
+	msg_puts("\n");
 	p_more = save_p_more;
 	--term->tl_toprow;
     }
@@ -4031,7 +4002,6 @@ f_term_dumpwrite(typval_T *argvars, typval_T *rettv UNUSED)
 		    if (cell.width == 2)
 		    {
 			fputs("*", fd);
-			++pos.col;
 		    }
 		    else
 			fputs("+", fd);
@@ -4062,6 +4032,9 @@ f_term_dumpwrite(typval_T *argvars, typval_T *rettv UNUSED)
 
 		prev_cell = cell;
 	    }
+
+	    if (cell.width == 2)
+		++pos.col;
 	}
 	if (repeat > 0)
 	    fprintf(fd, "@%d", repeat);
@@ -4103,6 +4076,7 @@ read_dump_file(FILE *fd, VTermPos *cursor_pos)
     char_u	    *prev_char = NULL;
     int		    attr = 0;
     cellattr_T	    cell;
+    cellattr_T	    empty_cell;
     term_T	    *term = curbuf->b_term;
     int		    max_cells = 0;
     int		    start_row = term->tl_scrollback.ga_len;
@@ -4110,6 +4084,7 @@ read_dump_file(FILE *fd, VTermPos *cursor_pos)
     ga_init2(&ga_text, 1, 90);
     ga_init2(&ga_cell, sizeof(cellattr_T), 90);
     vim_memset(&cell, 0, sizeof(cell));
+    vim_memset(&empty_cell, 0, sizeof(empty_cell));
     cursor_pos->row = -1;
     cursor_pos->col = -1;
 
@@ -4208,66 +4183,68 @@ read_dump_file(FILE *fd, VTermPos *cursor_pos)
 			c = fgetc(fd);
 		    }
 		    hl2vtermAttr(attr, &cell);
+
+		    /* is_bg == 0: fg, is_bg == 1: bg */
+		    for (is_bg = 0; is_bg <= 1; ++is_bg)
+		    {
+			if (c == '&')
+			{
+			    /* use same color as previous cell */
+			    c = fgetc(fd);
+			}
+			else if (c == '#')
+			{
+			    int red, green, blue, index = 0;
+
+			    c = fgetc(fd);
+			    red = hex2nr(c);
+			    c = fgetc(fd);
+			    red = (red << 4) + hex2nr(c);
+			    c = fgetc(fd);
+			    green = hex2nr(c);
+			    c = fgetc(fd);
+			    green = (green << 4) + hex2nr(c);
+			    c = fgetc(fd);
+			    blue = hex2nr(c);
+			    c = fgetc(fd);
+			    blue = (blue << 4) + hex2nr(c);
+			    c = fgetc(fd);
+			    if (!isdigit(c))
+				dump_is_corrupt(&ga_text);
+			    while (isdigit(c))
+			    {
+				index = index * 10 + (c - '0');
+				c = fgetc(fd);
+			    }
+
+			    if (is_bg)
+			    {
+				cell.bg.red = red;
+				cell.bg.green = green;
+				cell.bg.blue = blue;
+				cell.bg.ansi_index = index;
+			    }
+			    else
+			    {
+				cell.fg.red = red;
+				cell.fg.green = green;
+				cell.fg.blue = blue;
+				cell.fg.ansi_index = index;
+			    }
+			}
+			else
+			    dump_is_corrupt(&ga_text);
+		    }
 		}
 		else
 		    dump_is_corrupt(&ga_text);
-
-		/* is_bg == 0: fg, is_bg == 1: bg */
-		for (is_bg = 0; is_bg <= 1; ++is_bg)
-		{
-		    if (c == '&')
-		    {
-			/* use same color as previous cell */
-			c = fgetc(fd);
-		    }
-		    else if (c == '#')
-		    {
-			int red, green, blue, index = 0;
-
-			c = fgetc(fd);
-			red = hex2nr(c);
-			c = fgetc(fd);
-			red = (red << 4) + hex2nr(c);
-			c = fgetc(fd);
-			green = hex2nr(c);
-			c = fgetc(fd);
-			green = (green << 4) + hex2nr(c);
-			c = fgetc(fd);
-			blue = hex2nr(c);
-			c = fgetc(fd);
-			blue = (blue << 4) + hex2nr(c);
-			c = fgetc(fd);
-			if (!isdigit(c))
-			    dump_is_corrupt(&ga_text);
-			while (isdigit(c))
-			{
-			    index = index * 10 + (c - '0');
-			    c = fgetc(fd);
-			}
-
-			if (is_bg)
-			{
-			    cell.bg.red = red;
-			    cell.bg.green = green;
-			    cell.bg.blue = blue;
-			    cell.bg.ansi_index = index;
-			}
-			else
-			{
-			    cell.fg.red = red;
-			    cell.fg.green = green;
-			    cell.fg.blue = blue;
-			    cell.fg.ansi_index = index;
-			}
-		    }
-		    else
-			dump_is_corrupt(&ga_text);
-		}
 	    }
 	    else
 		dump_is_corrupt(&ga_text);
 
 	    append_cell(&ga_cell, &cell);
+	    if (cell.width == 2)
+		append_cell(&ga_cell, &empty_cell);
 	}
 	else if (c == '@')
 	{
@@ -5402,11 +5379,13 @@ term_send_eof(channel_T *ch)
 	}
 }
 
+#if defined(FEAT_GUI) || defined(PROTO)
     job_T *
 term_getjob(term_T *term)
 {
     return term != NULL ? term->tl_job : NULL;
 }
+#endif
 
 # if defined(WIN3264) || defined(PROTO)
 

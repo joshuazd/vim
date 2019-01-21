@@ -54,6 +54,7 @@ json_encode(typval_T *val, int options)
     return ga.ga_data;
 }
 
+#if defined(FEAT_JOB_CHANNEL) || defined(PROTO)
 /*
  * Encode ["nr", "val"] into a JSON format string in allocated memory.
  * "options" can contain JSON_JS, JSON_NO_NONE and JSON_NL.
@@ -83,6 +84,7 @@ json_encode_nr_expr(int nr, typval_T *val, int options)
     list_unref(listtv.vval.v_list);
     return ga.ga_data;
 }
+#endif
 
     static void
 write_string(garray_T *gap, char_u *str)
@@ -218,7 +220,7 @@ json_encode_item(garray_T *gap, typval_T *val, int copyID, int options)
 
 	case VAR_NUMBER:
 	    vim_snprintf((char *)numbuf, NUMBUFLEN, "%lld",
-						(long long)val->vval.v_number);
+						(long_long_T)val->vval.v_number);
 	    ga_concat(gap, numbuf);
 	    break;
 
@@ -1082,6 +1084,7 @@ json_decode_all(js_read_T *reader, typval_T *res, int options)
     return OK;
 }
 
+#if defined(FEAT_JOB_CHANNEL) || defined(PROTO)
 /*
  * Decode the JSON from "reader" and store the result in "res".
  * "options" can be JSON_JS or zero;
@@ -1102,6 +1105,7 @@ json_decode(js_read_T *reader, typval_T *res, int options)
 
     return ret;
 }
+#endif
 
 /*
  * Decode the JSON from "reader" to find the end of the message.

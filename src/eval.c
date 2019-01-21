@@ -245,8 +245,8 @@ static char_u * make_expanded_name(char_u *in_start, char_u *expr_start, char_u 
 static void check_vars(char_u *name, int len);
 static typval_T *alloc_string_tv(char_u *string);
 static void delete_var(hashtab_T *ht, hashitem_T *hi);
-static void list_one_var(dictitem_T *v, char_u *prefix, int *first);
-static void list_one_var_a(char_u *prefix, char_u *name, int type, char_u *string, int *first);
+static void list_one_var(dictitem_T *v, char *prefix, int *first);
+static void list_one_var_a(char *prefix, char_u *name, int type, char_u *string, int *first);
 static char_u *find_option_end(char_u **arg, int *opt_flags);
 
 /* for VIM_VERSION_ defines */
@@ -268,7 +268,7 @@ compare_func_name(const void *s1, const void *s2)
 
 /*
  * Sort the function table by function name.
- * The sorting of the table above is ASCII dependant.
+ * The sorting of the table above is ASCII dependent.
  * On machines using EBCDIC we have to sort it.
  */
     static void
@@ -1448,7 +1448,7 @@ skip_var_one(char_u *arg)
     void
 list_hashtable_vars(
     hashtab_T	*ht,
-    char_u	*prefix,
+    char	*prefix,
     int		empty,
     int		*first)
 {
@@ -1466,8 +1466,8 @@ list_hashtable_vars(
 	    di = HI2DI(hi);
 
 	    // apply :filter /pat/ to variable name
-	    vim_strncpy((char_u *) buf, prefix, IOSIZE - 1);
-	    vim_strcat((char_u *) buf, di->di_key, IOSIZE);
+	    vim_strncpy((char_u *)buf, (char_u *)prefix, IOSIZE - 1);
+	    vim_strcat((char_u *)buf, di->di_key, IOSIZE);
 	    if (message_filtered(buf))
 		continue;
 
@@ -1484,7 +1484,7 @@ list_hashtable_vars(
     static void
 list_glob_vars(int *first)
 {
-    list_hashtable_vars(&globvarht, (char_u *)"", TRUE, first);
+    list_hashtable_vars(&globvarht, "", TRUE, first);
 }
 
 /*
@@ -1493,8 +1493,7 @@ list_glob_vars(int *first)
     static void
 list_buf_vars(int *first)
 {
-    list_hashtable_vars(&curbuf->b_vars->dv_hashtab, (char_u *)"b:",
-								 TRUE, first);
+    list_hashtable_vars(&curbuf->b_vars->dv_hashtab, "b:", TRUE, first);
 }
 
 /*
@@ -1503,8 +1502,7 @@ list_buf_vars(int *first)
     static void
 list_win_vars(int *first)
 {
-    list_hashtable_vars(&curwin->w_vars->dv_hashtab,
-						 (char_u *)"w:", TRUE, first);
+    list_hashtable_vars(&curwin->w_vars->dv_hashtab, "w:", TRUE, first);
 }
 
 /*
@@ -1513,8 +1511,7 @@ list_win_vars(int *first)
     static void
 list_tab_vars(int *first)
 {
-    list_hashtable_vars(&curtab->tp_vars->dv_hashtab,
-						 (char_u *)"t:", TRUE, first);
+    list_hashtable_vars(&curtab->tp_vars->dv_hashtab, "t:", TRUE, first);
 }
 
 /*
@@ -1523,7 +1520,7 @@ list_tab_vars(int *first)
     static void
 list_vim_vars(int *first)
 {
-    list_hashtable_vars(&vimvarht, (char_u *)"v:", FALSE, first);
+    list_hashtable_vars(&vimvarht, "v:", FALSE, first);
 }
 
 /*
@@ -1534,7 +1531,7 @@ list_script_vars(int *first)
 {
     if (current_sctx.sc_sid > 0 && current_sctx.sc_sid <= ga_scripts.ga_len)
 	list_hashtable_vars(&SCRIPT_VARS(current_sctx.sc_sid),
-						(char_u *)"s:", FALSE, first);
+							   "s:", FALSE, first);
 }
 
 /*
@@ -1619,7 +1616,7 @@ list_arg_vars(exarg_T *eap, char_u *arg, int *first)
 			    s = echo_string(&tv, &tf, numbuf, 0);
 			    c = *arg;
 			    *arg = NUL;
-			    list_one_var_a((char_u *)"",
+			    list_one_var_a("",
 				    arg == arg_subsc ? name : name_start,
 				    tv.v_type,
 				    s == NULL ? (char_u *)"" : s,
@@ -4258,6 +4255,8 @@ eval7(
 			if (blob != NULL)
 			    ga_append(&blob->bv_ga,
 					 (hex2nr(*bp) << 4) + hex2nr(*(bp+1)));
+			if (bp[2] == '.' && vim_isxdigit(bp[3]))
+			    ++bp;
 		    }
 		    if (blob != NULL)
 			rettv_blob_set(rettv, blob);
@@ -5460,7 +5459,7 @@ garbage_collect(int testing)
     }
     else if (p_verbose > 0)
     {
-	verb_msg((char_u *)_("Not enough memory to set references, garbage collection aborted!"));
+	verb_msg(_("Not enough memory to set references, garbage collection aborted!"));
     }
 
     return did_free;
@@ -7412,7 +7411,7 @@ tv_get_string_buf_chk(typval_T *varp, char_u *buf)
     {
 	case VAR_NUMBER:
 	    vim_snprintf((char *)buf, NUMBUFLEN, "%lld",
-					    (long long)varp->vval.v_number);
+					    (long_long_T)varp->vval.v_number);
 	    return buf;
 	case VAR_FUNC:
 	case VAR_PARTIAL:
@@ -7789,7 +7788,7 @@ delete_var(hashtab_T *ht, hashitem_T *hi)
  * List the value of one internal variable.
  */
     static void
-list_one_var(dictitem_T *v, char_u *prefix, int *first)
+list_one_var(dictitem_T *v, char *prefix, int *first)
 {
     char_u	*tofree;
     char_u	*s;
@@ -7803,7 +7802,7 @@ list_one_var(dictitem_T *v, char_u *prefix, int *first)
 
     static void
 list_one_var_a(
-    char_u	*prefix,
+    char	*prefix,
     char_u	*name,
     int		type,
     char_u	*string,
@@ -7813,7 +7812,7 @@ list_one_var_a(
     msg_start();
     msg_puts(prefix);
     if (name != NULL)	/* "a:" vars don't have a name stored */
-	msg_puts(name);
+	msg_puts((char *)name);
     msg_putchar(' ');
     msg_advance(22);
     if (type == VAR_NUMBER)
@@ -7838,7 +7837,7 @@ list_one_var_a(
     msg_outtrans(string);
 
     if (type == VAR_FUNC || type == VAR_PARTIAL)
-	msg_puts((char_u *)"()");
+	msg_puts("()");
     if (*first)
     {
 	msg_clr_eos();
@@ -8198,7 +8197,6 @@ item_copy(
 	case VAR_SPECIAL:
 	case VAR_JOB:
 	case VAR_CHANNEL:
-	case VAR_BLOB:
 	    copy_tv(from, to);
 	    break;
 	case VAR_LIST:
@@ -8216,6 +8214,21 @@ item_copy(
 		to->vval.v_list = list_copy(from->vval.v_list, deep, copyID);
 	    if (to->vval.v_list == NULL)
 		ret = FAIL;
+	    break;
+	case VAR_BLOB:
+	    to->v_type = VAR_BLOB;
+	    if (from->vval.v_blob == NULL)
+		to->vval.v_blob = NULL;
+	    else if (rettv_blob_alloc(to) == FAIL)
+		ret = FAIL;
+	    else
+	    {
+		int  len = from->vval.v_blob->bv_ga.ga_len;
+
+		to->vval.v_blob->bv_ga.ga_data =
+			    vim_memsave(from->vval.v_blob->bv_ga.ga_data, len);
+		to->vval.v_blob->bv_ga.ga_len = len;
+	    }
 	    break;
 	case VAR_DICT:
 	    to->v_type = VAR_DICT;
@@ -8288,7 +8301,7 @@ get_user_input(
 	    *p = NUL;
 	    msg_start();
 	    msg_clr_eos();
-	    msg_puts_attr(prompt, echo_attr);
+	    msg_puts_attr((char *)prompt, echo_attr);
 	    msg_didout = FALSE;
 	    msg_starthere();
 	    *p = c;
@@ -8406,7 +8419,7 @@ ex_echo(exarg_T *eap)
 		}
 	    }
 	    else if (eap->cmdidx == CMD_echo)
-		msg_puts_attr((char_u *)" ", echo_attr);
+		msg_puts_attr(" ", echo_attr);
 	    p = echo_string(&rettv, &tofree, numbuf, get_copyID());
 	    if (p != NULL)
 		for ( ; *p != NUL && !got_int; ++p)
@@ -8530,7 +8543,7 @@ ex_execute(exarg_T *eap)
 
 	if (eap->cmdidx == CMD_echomsg)
 	{
-	    MSG_ATTR(ga.ga_data, echo_attr);
+	    msg_attr(ga.ga_data, echo_attr);
 	    out_flush();
 	}
 	else if (eap->cmdidx == CMD_echoerr)
@@ -9143,11 +9156,11 @@ last_set_msg(sctx_T script_ctx)
 	if (p != NULL)
 	{
 	    verbose_enter();
-	    MSG_PUTS(_("\n\tLast set from "));
-	    MSG_PUTS(p);
+	    msg_puts(_("\n\tLast set from "));
+	    msg_puts((char *)p);
 	    if (script_ctx.sc_lnum > 0)
 	    {
-		MSG_PUTS(_(" line "));
+		msg_puts(_(" line "));
 		msg_outnum((long)script_ctx.sc_lnum);
 	    }
 	    verbose_leave();
