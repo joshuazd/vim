@@ -473,11 +473,8 @@ CONF_OPT_RUBY = --enable-rubyinterp=dynamic
 # Uncomment this when you want to include the Cscope interface.
 CONF_OPT_CSCOPE = --enable-cscope
 
-# WORKSHOP - Sun Visual Workshop interface.  Only works with Motif!
-#CONF_OPT_WORKSHOP = --enable-workshop
-
 # NETBEANS - NetBeans interface. Only works with Motif, GTK, and gnome.
-# Motif version must have XPM libraries (see |workshop-xpm|).
+# Motif version must have XPM libraries (see |netbeans-xpm|).
 # Uncomment this when you do not want the netbeans interface.
 #CONF_OPT_NETBEANS = --disable-netbeans
 
@@ -611,6 +608,8 @@ CONF_OPT_COMPBY = "--with-compiledby=Joshua Zink-Duda <zinkdudajoshua@gmail.com>
 #CFLAGS = -g -O2 '-DSTARTUPTIME="vimstartup"' -fno-strength-reduce -Wall -Wmissing-prototypes
 
 # Use this with GCC to check for mistakes, unused arguments, etc.
+# Note: If you use -Wextra and get warnings in GTK code about function
+#       parameters, you can add -Wno-cast-function-type
 #CFLAGS = -g -Wall -Wextra -Wshadow -Wmissing-prototypes -Wunreachable-code -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=1
 # Add -Wpedantic to find // comments and other C99 constructs.
 # Better disable Perl and Python to avoid a lot of warnings.
@@ -1574,6 +1573,7 @@ include testdir/Make_all.mak
 
 BASIC_SRC = \
 	arabic.c \
+	autocmd.c \
 	beval.c \
 	blob.c \
 	blowfish.c \
@@ -1600,6 +1600,7 @@ BASIC_SRC = \
 	hashtab.c \
 	if_cscope.c \
 	if_xcmdsrv.c \
+	indent.c \
 	json.c \
 	list.c \
 	main.c \
@@ -1686,6 +1687,7 @@ LINT_SRC = $(BASIC_SRC) $(GUI_SRC) $(HANGULIN_SRC) \
 
 OBJ_COMMON = \
 	objects/arabic.o \
+	objects/autocmd.o \
 	objects/beval.o \
 	objects/buffer.o \
 	objects/blob.o \
@@ -1712,6 +1714,7 @@ OBJ_COMMON = \
 	$(HANGULIN_OBJ) \
 	objects/if_cscope.o \
 	objects/if_xcmdsrv.o \
+	objects/indent.o \
 	objects/list.o \
 	objects/mark.o \
 	objects/memline.o \
@@ -1811,6 +1814,7 @@ ALL_OBJ = $(OBJ_COMMON) \
 
 PRO_AUTO = \
 	arabic.pro \
+	autocmd.pro \
 	blowfish.pro \
 	buffer.pro \
 	charset.pro \
@@ -1841,6 +1845,7 @@ PRO_AUTO = \
 	if_python3.pro \
 	if_ruby.pro \
 	if_xcmdsrv.pro \
+	indent.pro \
 	json.pro \
 	list.pro \
 	main.pro \
@@ -2936,6 +2941,9 @@ $(ALL_OBJ): objects/.dirstamp
 objects/arabic.o: arabic.c
 	$(CCC) -o $@ arabic.c
 
+objects/autocmd.o: autocmd.c
+	$(CCC) -o $@ autocmd.c
+
 objects/blob.o: blob.c
 	$(CCC) -o $@ blob.c
 
@@ -3088,6 +3096,9 @@ objects/if_ruby.o: if_ruby.c
 
 objects/if_tcl.o: if_tcl.c
 	$(CCC_NF) $(TCL_CFLAGS) $(ALL_CFLAGS) -o $@ if_tcl.c
+
+objects/indent.o: indent.c
+	$(CCC) -o $@ indent.c
 
 objects/json.o: json.c
 	$(CCC) -o $@ json.c
@@ -3378,6 +3389,10 @@ objects/arabic.o: arabic.c vim.h protodef.h auto/config.h feature.h os_unix.h \
  auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
  proto.h globals.h farsi.h arabic.h
+objects/autocmd.o: autocmd.c vim.h protodef.h auto/config.h feature.h os_unix.h \
+ auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
+ proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
+ proto.h globals.h farsi.h arabic.h
 objects/beval.o: beval.c vim.h protodef.h auto/config.h feature.h os_unix.h \
  auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
@@ -3482,6 +3497,10 @@ objects/if_xcmdsrv.o: if_xcmdsrv.c vim.h protodef.h auto/config.h feature.h \
  os_unix.h auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
  proto.h globals.h farsi.h arabic.h version.h
+objects/indent.o: indent.c vim.h protodef.h auto/config.h feature.h os_unix.h \
+ auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
+ proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
+ proto.h globals.h farsi.h arabic.h
 objects/json.o: json.c vim.h protodef.h auto/config.h feature.h os_unix.h \
  auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
