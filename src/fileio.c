@@ -4661,7 +4661,7 @@ restore_backup:
 	 * work (could be a pipe).
 	 * If the 'fsync' option is FALSE, don't fsync().  Useful for laptops.
 	 */
-	if (p_fs && fsync(fd) != 0 && !device)
+	if (p_fs && vim_fsync(fd) != 0 && !device)
 	{
 	    errmsg = (char_u *)_(e_fsync);
 	    end = 0;
@@ -5122,6 +5122,25 @@ nofail:
 
     return retval;
 }
+
+#if defined(HAVE_FSYNC) || defined(PROTO)
+/*
+ * Call fsync() with Mac-specific exception.
+ * Return fsync() result: zero for success.
+ */
+    int
+vim_fsync(int fd)
+{
+    int r;
+
+# ifdef MACOS_X
+    r = fcntl(fd, F_FULLFSYNC);
+    if (r != 0 && errno == ENOTTY)
+# endif
+	r = fsync(fd);
+    return r;
+}
+#endif
 
 /*
  * Set the name of the current buffer.  Use when the buffer doesn't have a
@@ -6224,13 +6243,7 @@ buf_modname(
      */
     for (ptr = retval + fnamelen; ptr > retval; MB_PTR_BACK(retval, ptr))
     {
-	if (*ext == '.'
-#ifdef USE_LONG_FNAME
-		    && (!USE_LONG_FNAME || shortname)
-#else
-		    && shortname
-#endif
-								)
+	if (*ext == '.' && shortname)
 	    if (*ptr == '.')	/* replace '.' by '_' */
 		*ptr = '_';
 	if (vim_ispathsep(*ptr))
@@ -6249,11 +6262,7 @@ buf_modname(
     /*
      * For 8.3 file names we may have to reduce the length.
      */
-#ifdef USE_LONG_FNAME
-    if (!USE_LONG_FNAME || shortname)
-#else
     if (shortname)
-#endif
     {
 	/*
 	 * If there is no file name, or the file name ends in '/', and the
@@ -6291,7 +6300,7 @@ buf_modname(
 	else if ((int)STRLEN(e) + extlen > 4)
 	    s = e + 4 - extlen;
     }
-#if defined(USE_LONG_FNAME) || defined(WIN3264)
+#ifdef WIN3264
     /*
      * If there is no file name, and the extension starts with '.', put a
      * '_' before the dot, because just ".ext" may be invalid if it's on a
@@ -6310,11 +6319,7 @@ buf_modname(
     /*
      * Prepend the dot.
      */
-    if (prepend_dot && !shortname && *(e = gettail(retval)) != '.'
-#ifdef USE_LONG_FNAME
-	    && USE_LONG_FNAME
-#endif
-				)
+    if (prepend_dot && !shortname && *(e = gettail(retval)) != '.')
     {
 	STRMOVE(e + 1, e);
 	*e = '.';
@@ -7322,6 +7327,8 @@ vim_tempname(
 {
 #ifdef USE_TMPNAM
     char_u	itmp[L_tmpnam];	/* use tmpnam() */
+#elif defined(WIN3264)
+    WCHAR	itmp[TEMPNAMELEN];
 #else
     char_u	itmp[TEMPNAMELEN];
 #endif
@@ -7443,29 +7450,29 @@ vim_tempname(
 #else /* TEMPDIRNAMES */
 
 # ifdef WIN3264
-    char	szTempFile[_MAX_PATH + 1];
-    char	buf4[4];
+    WCHAR	wszTempFile[_MAX_PATH + 1];
+    WCHAR	buf4[4];
     char_u	*retval;
     char_u	*p;
 
-    STRCPY(itmp, "");
-    if (GetTempPath(_MAX_PATH, szTempFile) == 0)
+    wcscpy(itmp, L"");
+    if (GetTempPathW(_MAX_PATH, wszTempFile) == 0)
     {
-	szTempFile[0] = '.';	/* GetTempPath() failed, use current dir */
-	szTempFile[1] = NUL;
+	wszTempFile[0] = L'.';	// GetTempPathW() failed, use current dir
+	wszTempFile[1] = NUL;
     }
-    strcpy(buf4, "VIM");
+    wcscpy(buf4, L"VIM");
     buf4[2] = extra_char;   /* make it "VIa", "VIb", etc. */
-    if (GetTempFileName(szTempFile, buf4, 0, (LPSTR)itmp) == 0)
+    if (GetTempFileNameW(wszTempFile, buf4, 0, itmp) == 0)
 	return NULL;
     if (!keep)
-	/* GetTempFileName() will create the file, we don't want that */
-	(void)DeleteFile((LPSTR)itmp);
+	// GetTempFileName() will create the file, we don't want that
+	(void)DeleteFileW(itmp);
 
-    /* Backslashes in a temp file name cause problems when filtering with
-     * "sh".  NOTE: This also checks 'shellcmdflag' to help those people who
-     * didn't set 'shellslash'. */
-    retval = vim_strsave(itmp);
+    // Backslashes in a temp file name cause problems when filtering with
+    // "sh".  NOTE: This also checks 'shellcmdflag' to help those people who
+    // didn't set 'shellslash'.
+    retval = utf16_to_enc(itmp, NULL);
     if (*p_shcf == '-' || p_ssl)
 	for (p = retval; *p; ++p)
 	    if (*p == '\\')

@@ -1248,7 +1248,7 @@ f_add(typval_T *argvars, typval_T *rettv)
     if (argvars[0].v_type == VAR_LIST)
     {
 	if ((l = argvars[0].vval.v_list) != NULL
-		&& !tv_check_lock(l->lv_lock,
+		&& !var_check_lock(l->lv_lock,
 					 (char_u *)N_("add() argument"), TRUE)
 		&& list_append_tv(l, &argvars[1]) == OK)
 	    copy_tv(&argvars[0], rettv);
@@ -1256,7 +1256,7 @@ f_add(typval_T *argvars, typval_T *rettv)
     else if (argvars[0].v_type == VAR_BLOB)
     {
 	if ((b = argvars[0].vval.v_blob) != NULL
-		&& !tv_check_lock(b->bv_lock,
+		&& !var_check_lock(b->bv_lock,
 					 (char_u *)N_("add() argument"), TRUE))
 	{
 	    int		error = FALSE;
@@ -3579,7 +3579,7 @@ f_extend(typval_T *argvars, typval_T *rettv)
 
 	l1 = argvars[0].vval.v_list;
 	l2 = argvars[1].vval.v_list;
-	if (l1 != NULL && !tv_check_lock(l1->lv_lock, arg_errmsg, TRUE)
+	if (l1 != NULL && !var_check_lock(l1->lv_lock, arg_errmsg, TRUE)
 		&& l2 != NULL)
 	{
 	    if (argvars[2].v_type != VAR_UNKNOWN)
@@ -3615,7 +3615,7 @@ f_extend(typval_T *argvars, typval_T *rettv)
 
 	d1 = argvars[0].vval.v_dict;
 	d2 = argvars[1].vval.v_dict;
-	if (d1 != NULL && !tv_check_lock(d1->dv_lock, arg_errmsg, TRUE)
+	if (d1 != NULL && !var_check_lock(d1->dv_lock, arg_errmsg, TRUE)
 		&& d2 != NULL)
 	{
 	    /* Check the third argument. */
@@ -5271,6 +5271,8 @@ f_getjumplist(typval_T *argvars, typval_T *rettv)
     if (wp == NULL)
 	return;
 
+    cleanup_jumplist(wp, TRUE);
+
     l = list_alloc();
     if (l == NULL)
 	return;
@@ -5278,8 +5280,6 @@ f_getjumplist(typval_T *argvars, typval_T *rettv)
     if (list_append_list(rettv->vval.v_list, l) == FAIL)
 	return;
     list_append_number(rettv->vval.v_list, (varnumber_T)wp->w_jumplistidx);
-
-    cleanup_jumplist(wp, TRUE);
 
     for (i = 0; i < wp->w_jumplistlen; ++i)
     {
@@ -5800,7 +5800,7 @@ f_getwininfo(typval_T *argvars, typval_T *rettv)
 
     if (argvars[0].v_type != VAR_UNKNOWN)
     {
-	wparg = win_id2wp(argvars);
+	wparg = win_id2wp(tv_get_number(&argvars[0]));
 	if (wparg == NULL)
 	    return;
     }
@@ -6817,7 +6817,7 @@ f_histadd(typval_T *argvars UNUSED, typval_T *rettv)
 #endif
 
     rettv->vval.v_number = FALSE;
-    if (check_restricted() || check_secure())
+    if (check_secure())
 	return;
 #ifdef FEAT_CMDHIST
     str = tv_get_string_chk(&argvars[0]);	/* NULL on type error */
@@ -7266,8 +7266,9 @@ f_insert(typval_T *argvars, typval_T *rettv)
     }
     else if (argvars[0].v_type != VAR_LIST)
 	semsg(_(e_listblobarg), "insert()");
-    else if ((l = argvars[0].vval.v_list) != NULL && !tv_check_lock(l->lv_lock,
-				      (char_u *)N_("insert() argument"), TRUE))
+    else if ((l = argvars[0].vval.v_list) != NULL
+	    && !var_check_lock(l->lv_lock,
+				     (char_u *)N_("insert() argument"), TRUE))
     {
 	if (argvars[2].v_type != VAR_UNKNOWN)
 	    before = (long)tv_get_number_chk(&argvars[2], &error);
@@ -7897,6 +7898,9 @@ f_luaeval(typval_T *argvars, typval_T *rettv)
 {
     char_u	*str;
     char_u	buf[NUMBUFLEN];
+
+    if (check_restricted() || check_secure())
+	return;
 
     str = tv_get_string_buf(&argvars[0], buf);
     do_luaeval(str, argvars + 1, rettv);
@@ -8644,6 +8648,8 @@ f_mzeval(typval_T *argvars, typval_T *rettv)
     char_u	*str;
     char_u	buf[NUMBUFLEN];
 
+    if (check_restricted() || check_secure())
+	return;
     str = tv_get_string_buf(&argvars[0], buf);
     do_mzeval(str, rettv);
 }
@@ -8932,6 +8938,9 @@ f_py3eval(typval_T *argvars, typval_T *rettv)
     char_u	*str;
     char_u	buf[NUMBUFLEN];
 
+    if (check_restricted() || check_secure())
+	return;
+
     if (p_pyx == 0)
 	p_pyx = 3;
 
@@ -8950,6 +8959,9 @@ f_pyeval(typval_T *argvars, typval_T *rettv)
     char_u	*str;
     char_u	buf[NUMBUFLEN];
 
+    if (check_restricted() || check_secure())
+	return;
+
     if (p_pyx == 0)
 	p_pyx = 2;
 
@@ -8965,6 +8977,9 @@ f_pyeval(typval_T *argvars, typval_T *rettv)
     static void
 f_pyxeval(typval_T *argvars, typval_T *rettv)
 {
+    if (check_restricted() || check_secure())
+	return;
+
 # if defined(FEAT_PYTHON) && defined(FEAT_PYTHON3)
     init_pyxversion();
     if (p_pyx == 2)
@@ -9684,7 +9699,7 @@ f_remove(typval_T *argvars, typval_T *rettv)
 	if (argvars[2].v_type != VAR_UNKNOWN)
 	    semsg(_(e_toomanyarg), "remove()");
 	else if ((d = argvars[0].vval.v_dict) != NULL
-		&& !tv_check_lock(d->dv_lock, arg_errmsg, TRUE))
+		&& !var_check_lock(d->dv_lock, arg_errmsg, TRUE))
 	{
 	    key = tv_get_string_chk(&argvars[1]);
 	    if (key != NULL)
@@ -9767,7 +9782,7 @@ f_remove(typval_T *argvars, typval_T *rettv)
     else if (argvars[0].v_type != VAR_LIST)
 	semsg(_(e_listdictblobarg), "remove()");
     else if ((l = argvars[0].vval.v_list) != NULL
-			       && !tv_check_lock(l->lv_lock, arg_errmsg, TRUE))
+			      && !var_check_lock(l->lv_lock, arg_errmsg, TRUE))
     {
 	idx = (long)tv_get_number_chk(&argvars[1], &error);
 	if (error)
@@ -9898,7 +9913,7 @@ f_resolve(typval_T *argvars, typval_T *rettv)
     {
 	char_u	*v = NULL;
 
-	v = mch_resolve_shortcut(p);
+	v = mch_resolve_path(p, TRUE);
 	if (v != NULL)
 	    rettv->vval.v_string = v;
 	else
@@ -10114,7 +10129,7 @@ f_reverse(typval_T *argvars, typval_T *rettv)
     if (argvars[0].v_type != VAR_LIST)
 	semsg(_(e_listblobarg), "reverse()");
     else if ((l = argvars[0].vval.v_list) != NULL
-	    && !tv_check_lock(l->lv_lock,
+	    && !var_check_lock(l->lv_lock,
 				    (char_u *)N_("reverse() argument"), TRUE))
     {
 	li = l->lv_last;
@@ -10819,7 +10834,7 @@ f_setbufvar(typval_T *argvars, typval_T *rettv UNUSED)
     typval_T	*varp;
     char_u	nbuf[NUMBUFLEN];
 
-    if (check_restricted() || check_secure())
+    if (check_secure())
 	return;
     (void)tv_get_number(&argvars[0]);	    /* issue errmsg if type error */
     varname = tv_get_string_chk(&argvars[1]);
@@ -11341,7 +11356,7 @@ f_settabvar(typval_T *argvars, typval_T *rettv)
 
     rettv->vval.v_number = 0;
 
-    if (check_restricted() || check_secure())
+    if (check_secure())
 	return;
 
     tp = find_tabpage((int)tv_get_number_chk(&argvars[0], NULL));
@@ -12098,7 +12113,7 @@ do_sort_uniq(typval_T *argvars, typval_T *rettv, int sort)
     else
     {
 	l = argvars[0].vval.v_list;
-	if (l == NULL || tv_check_lock(l->lv_lock,
+	if (l == NULL || var_check_lock(l->lv_lock,
 	     (char_u *)(sort ? N_("sort() argument") : N_("uniq() argument")),
 									TRUE))
 	    goto theend;
@@ -14714,7 +14729,7 @@ f_writefile(typval_T *argvars, typval_T *rettv)
     blob_T	*blob = NULL;
 
     rettv->vval.v_number = -1;
-    if (check_restricted() || check_secure())
+    if (check_secure())
 	return;
 
     if (argvars[0].v_type == VAR_LIST)
@@ -14776,7 +14791,7 @@ f_writefile(typval_T *argvars, typval_T *rettv)
 	else if (do_fsync)
 	    // Ignore the error, the user wouldn't know what to do about it.
 	    // May happen for a device.
-	    vim_ignored = fsync(fileno(fd));
+	    vim_ignored = vim_fsync(fileno(fd));
 #endif
 	fclose(fd);
     }
@@ -14788,7 +14803,7 @@ f_writefile(typval_T *argvars, typval_T *rettv)
 	else if (do_fsync)
 	    /* Ignore the error, the user wouldn't know what to do about it.
 	     * May happen for a device. */
-	    vim_ignored = fsync(fileno(fd));
+	    vim_ignored = vim_fsync(fileno(fd));
 #endif
 	fclose(fd);
     }
