@@ -59,8 +59,8 @@ execute "nnoremap <silent> <buffer> ][ :call <SID>Python_jump('n', '". b:next_en
 execute "nnoremap <silent> <buffer> [] :call <SID>Python_jump('n', '". b:prev_endtoplevel."', 'Wb', 0, v:count1)<cr>"
 execute "nnoremap <silent> <buffer> ]m :call <SID>Python_jump('n', '". b:next."', 'W', v:count1)<cr>"
 execute "nnoremap <silent> <buffer> [m :call <SID>Python_jump('n', '". b:prev."', 'Wb', v:count1)<cr>"
-execute "nnoremap <silent> <buffer> ]M :call <SID>Python_jump('n', '". b:next_end."', 'W', 0, v:count1)<cr>"
-execute "nnoremap <silent> <buffer> [M :call <SID>Python_jump('n', '". b:prev_end."', 'Wb', 0, v:count1)<cr>"
+execute "nnoremap <silent> <buffer> ]M :call <SID>Python_jump('n', '". b:next_end."', 'W', 1, v:count1)<cr>"
+execute "nnoremap <silent> <buffer> [M :call <SID>Python_jump('n', '". b:prev_end."', 'Wb', 1, v:count1)<cr>"
 
 execute "onoremap <silent> <buffer> ]] :call <SID>Python_jump('o', '". b:next_toplevel."', 'W', v:count1)<cr>"
 execute "onoremap <silent> <buffer> [[ :call <SID>Python_jump('o', '". b:prev_toplevel."', 'Wb', v:count1)<cr>"
@@ -68,8 +68,8 @@ execute "onoremap <silent> <buffer> ][ :call <SID>Python_jump('o', '". b:next_en
 execute "onoremap <silent> <buffer> [] :call <SID>Python_jump('o', '". b:prev_endtoplevel."', 'Wb', 0, v:count1)<cr>"
 execute "onoremap <silent> <buffer> ]m :call <SID>Python_jump('o', '". b:next."', 'W', v:count1)<cr>"
 execute "onoremap <silent> <buffer> [m :call <SID>Python_jump('o', '". b:prev."', 'Wb', v:count1)<cr>"
-execute "onoremap <silent> <buffer> ]M :call <SID>Python_jump('o', '". b:next_end."', 'W', 0, v:count1)<cr>"
-execute "onoremap <silent> <buffer> [M :call <SID>Python_jump('o', '". b:prev_end."', 'Wb', 0, v:count1)<cr>"
+execute "onoremap <silent> <buffer> ]M :call <SID>Python_jump('o', '". b:next_end."', 'W', 1, v:count1)<cr>"
+execute "onoremap <silent> <buffer> [M :call <SID>Python_jump('o', '". b:prev_end."', 'Wb', 1, v:count1)<cr>"
 
 execute "xnoremap <silent> <buffer> ]] :call <SID>Python_jump('x', '". b:next_toplevel."', 'W', v:count1)<cr>"
 execute "xnoremap <silent> <buffer> [[ :call <SID>Python_jump('x', '". b:prev_toplevel."', 'Wb', v:count1)<cr>"
@@ -77,8 +77,8 @@ execute "xnoremap <silent> <buffer> ][ :call <SID>Python_jump('x', '". b:next_en
 execute "xnoremap <silent> <buffer> [] :call <SID>Python_jump('x', '". b:prev_endtoplevel."', 'Wb', 0, v:count1)<cr>"
 execute "xnoremap <silent> <buffer> ]m :call <SID>Python_jump('x', '". b:next."', 'W', v:count1)<cr>"
 execute "xnoremap <silent> <buffer> [m :call <SID>Python_jump('x', '". b:prev."', 'Wb', v:count1)<cr>"
-execute "xnoremap <silent> <buffer> ]M :call <SID>Python_jump('x', '". b:next_end."', 'W', 0, v:count1)<cr>"
-execute "xnoremap <silent> <buffer> [M :call <SID>Python_jump('x', '". b:prev_end."', 'Wb', 0, v:count1)<cr>"
+execute "xnoremap <silent> <buffer> ]M :call <SID>Python_jump('x', '". b:next_end."', 'W', 1, v:count1)<cr>"
+execute "xnoremap <silent> <buffer> [M :call <SID>Python_jump('x', '". b:prev_end."', 'Wb', 1, v:count1)<cr>"
 
 if !exists('*<SID>Python_jump')
   fun! <SID>Python_jump(mode, motion, flags, count, ...) range
