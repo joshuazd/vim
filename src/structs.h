@@ -727,6 +727,7 @@ typedef struct proptype_S
 
 #define PT_FLAG_INS_START_INCL	1	// insert at start included in property
 #define PT_FLAG_INS_END_INCL	2	// insert at end included in property
+#define PT_FLAG_COMBINE		4	// combine with syntax highlight
 
 // Sign group
 typedef struct signgroup_S
@@ -3554,3 +3555,10 @@ typedef struct {
     varnumber_T vv_count;
     varnumber_T vv_count1;
 } vimvars_save_T;
+
+// Scope for changing directory
+typedef enum {
+    CDSCOPE_GLOBAL,	// :cd
+    CDSCOPE_TABPAGE,	// :tcd
+    CDSCOPE_WINDOW	// :lcd
+} cdscope_T;

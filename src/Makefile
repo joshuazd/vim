@@ -1989,7 +1989,7 @@ autoconf:
 # If this fails because you don't have Vim yet, first build and install Vim
 # without changes.
 cmdidxs: ex_cmds.h
-	vim -u NONE -i NONE -X -S create_cmdidxs.vim
+	vim --clean -X -u create_cmdidxs.vim
 
 
 # The normal command to compile a .c file to its .o file.
@@ -2177,7 +2177,7 @@ test_libvterm:
 # These do not depend on the executable, compile it when needed.
 test1 \
 	test_eval \
-	test3 test17 \
+	test3 \
 	test29 test30 test37 test39 \
 	test42 test44 test48 test49 \
 	test52 test59 \
@@ -2558,9 +2558,14 @@ install-icons:
 	   $(INSTALL_DATA) $(SCRIPTSOURCE)/vim16x16.png $(ICON16PATH)/gvim.png; \
 	fi
 	if test -d $(DESKTOPPATH) -a -w $(DESKTOPPATH); then \
-	   $(INSTALL_DATA) $(SCRIPTSOURCE)/vim.desktop \
-		$(SCRIPTSOURCE)/gvim.desktop \
-		$(DESKTOPPATH); \
+	   if test -f po/vim.desktop -a -f po/gvim.desktop; then \
+		$(INSTALL_DATA) po/vim.desktop po/gvim.desktop \
+			$(DESKTOPPATH); \
+	   else \
+		$(INSTALL_DATA) $(SCRIPTSOURCE)/vim.desktop \
+			$(SCRIPTSOURCE)/gvim.desktop \
+			$(DESKTOPPATH); \
+	   fi; \
 	   if test -z "$(DESTDIR)" -a -x "$(UPDATE_DESKTOP_DATABASE)"; then \
 	      $(UPDATE_DESKTOP_DATABASE) -q $(DESKTOPPATH); \
 	   fi \
