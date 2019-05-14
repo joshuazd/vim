@@ -767,6 +767,8 @@ static struct fst
     {"line2byte",	1, 1, f_line2byte},
     {"lispindent",	1, 1, f_lispindent},
     {"list2str",	1, 2, f_list2str},
+    {"listener_add",	1, 2, f_listener_add},
+    {"listener_remove",	1, 1, f_listener_remove},
     {"localtime",	0, 0, f_localtime},
 #ifdef FEAT_FLOAT
     {"log",		1, 1, f_log},
@@ -2007,12 +2009,11 @@ tv_get_buf(typval_T *tv, int curtab_only)
     return buf;
 }
 
-#ifdef FEAT_SIGNS
 /*
  * Get the buffer from "arg" and give an error and return NULL if it is not
  * valid.
  */
-    static buf_T *
+    buf_T *
 get_buf_arg(typval_T *arg)
 {
     buf_T *buf;
@@ -2024,7 +2025,6 @@ get_buf_arg(typval_T *arg)
 	semsg(_("E158: Invalid buffer name: %s"), tv_get_string(arg));
     return buf;
 }
-#endif
 
 /*
  * "bufname(expr)" function
@@ -9746,9 +9746,9 @@ f_readfile(typval_T *argvars, typval_T *rettv)
 
     if (failed)
     {
+	// an empty list is returned on error
 	list_free(rettv->vval.v_list);
-	/* readfile doc says an empty list is returned on error */
-	rettv->vval.v_list = list_alloc();
+	rettv_list_alloc(rettv);
     }
 
     vim_free(prev);
@@ -12644,8 +12644,7 @@ item_compare2(const void *s1, const void *s2)
     copy_tv(&si2->item->li_tv, &argv[1]);
 
     rettv.v_type = VAR_UNKNOWN;		/* clear_tv() uses this */
-    res = call_func(func_name, (int)STRLEN(func_name),
-				 &rettv, 2, argv, NULL, 0L, 0L, &dummy, TRUE,
+    res = call_func(func_name, -1, &rettv, 2, argv, NULL, 0L, 0L, &dummy, TRUE,
 				 partial, sortinfo->item_compare_selfdict);
     clear_tv(&argv[0]);
     clear_tv(&argv[1]);
@@ -13213,6 +13212,9 @@ f_str2nr(typval_T *argvars, typval_T *rettv)
 f_strftime(typval_T *argvars, typval_T *rettv)
 {
     char_u	result_buf[256];
+# ifdef HAVE_LOCALTIME_R
+    struct tm	tmval;
+# endif
     struct tm	*curtime;
     time_t	seconds;
     char_u	*p;
@@ -13224,7 +13226,11 @@ f_strftime(typval_T *argvars, typval_T *rettv)
 	seconds = time(NULL);
     else
 	seconds = (time_t)tv_get_number(&argvars[1]);
+# ifdef HAVE_LOCALTIME_R
+    curtime = localtime_r(&seconds, &tmval);
+# else
     curtime = localtime(&seconds);
+# endif
     /* MSVC returns NULL for an invalid value of seconds. */
     if (curtime == NULL)
 	rettv->vval.v_string = vim_strsave((char_u *)_("(Invalid)"));
@@ -14669,7 +14675,6 @@ f_test_settime(typval_T *argvars, typval_T *rettv UNUSED)
     time_for_testing = (time_t)tv_get_number(&argvars[0]);
 }
 
-#if defined(FEAT_JOB_CHANNEL) || defined(FEAT_TIMERS) || defined(PROTO)
 /*
  * Get a callback from "arg".  It can be a Funcref or a function name.
  * When "arg" is zero return an empty string.
@@ -14710,7 +14715,6 @@ free_callback(char_u *callback, partial_T *partial)
 	vim_free(callback);
     }
 }
-#endif
 
 #ifdef FEAT_TIMERS
 /*

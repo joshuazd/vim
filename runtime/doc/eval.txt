@@ -1,4 +1,4 @@
-*eval.txt*	For Vim version 8.1.  Last change: 2019 May 05
+*eval.txt*	For Vim version 8.1.  Last change: 2019 May 09
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -2457,6 +2457,9 @@ line({expr})			Number	line nr of cursor, last line or mark
 line2byte({lnum})		Number	byte count of line {lnum}
 lispindent({lnum})		Number	Lisp indent for line {lnum}
 list2str({list} [, {utf8}])	String	turn numbers in {list} into a String
+listener_add({callback} [, {buf}])
+				Number	add a callback to listen to changes
+listener_remove({id})		none	remove a listener callback
 localtime()			Number	current time
 log({expr})			Float	natural logarithm (base e) of {expr}
 log10({expr})			Float	logarithm of Float {expr} to base 10
@@ -6311,6 +6314,68 @@ list2str({list} [, {utf8}])				*list2str()*
 		With utf-8 composing characters work as expected: >
 			list2str([97, 769])	returns "á"
 <
+listener_add({callback} [, {buf}])			*listener_add()*
+		Add a callback function that will be invoked when changes have
+		been made to buffer {buf}.
+		{buf} refers to a buffer name or number. For the accepted
+		values, see |bufname()|.  When {buf} is omitted the current
+		buffer is used.
+		Returns a unique ID that can be passed to |listener_remove()|.
+
+		The {callback} is invoked with a list of items that indicate a
+		change.  The list cannot be changed.  Each list item is a
+		dictionary with these entries:
+		    lnum	the first line number of the change
+		    end		the first line below the change
+		    added	number of lines added; negative if lines were
+				deleted
+		    col		first column in "lnum" that was affected by
+				the change; one if unknown or the whole line
+				was affected; this is a byte index, first
+				character has a value of one.
+		When lines are inserted the values are:
+		    lnum	line below which the new line is added
+		    end		equal to "lnum"
+		    added	number of lines inserted
+		    col		one
+		When lines are deleted the values are:
+		    lnum	the first deleted line
+		    end		the line below the first deleted line, before
+				the deletion was done
+		    added	negative, number of lines deleted
+		    col		one
+		When lines are changed:
+		    lnum	the first changed line
+		    end		the line below the last changed line
+		    added	zero
+		    col		first column with a change or one
+
+		The entries are in the order the changes was made, thus the
+		most recent change is at the end.  One has to go through the
+		list from end to start to compute the line numbers in the
+		current state of the text.
+
+		When using the same function for multiple buffers, you can
+		pass the buffer to that function using a |Partial|.
+		Example: >
+		    func Listener(bufnr, changes)
+		      " ...
+		    endfunc
+		    let bufnr = ...
+		    call listener_add(function('Listener', [bufnr]), bufnr)
+
+<		The {callback} is invoked just before the screen is updated.
+		To trigger this in a script use the `:redraw` command.
+
+		The {callback} is not invoked when the buffer is first loaded.
+		Use the |BufReadPost| autocmd event to handle the initial text
+		of a buffer.
+		The {callback} is also not invoked when the buffer is
+		unloaded, use the |BufUnload| autocmd event for that.
+
+listener_remove({id})					*listener_remove()*
+		Remove a listener previously added with listener_add().
+
 localtime()						*localtime()*
 		Return the current time, measured as seconds since 1st Jan
 		1970.  See also |strftime()| and |getftime()|.
@@ -7271,7 +7336,7 @@ prop_type_add({name}, {props})		*prop_type_add()* *E969* *E970*
 				will be used; negative values can be used, the
 				default priority is zero
 		   combine	when TRUE combine the highlight with any
-				syntax highlight; when omitted of FALSE syntax
+				syntax highlight; when omitted or FALSE syntax
 				highlight will not be used
 		   start_incl	when TRUE inserts at the start position will
 				be included in the text property
@@ -10920,14 +10985,57 @@ change their contents.  Thus you can pass a |List| to a function and have the
 function add an item to it.  If you want to make sure the function cannot
 change a |List| or |Dictionary| use |:lockvar|.
 
-When not using "...", the number of arguments in a function call must be equal
-to the number of named arguments.  When using "...", the number of arguments
-may be larger.
-
 It is also possible to define a function without any arguments.  You must
 still supply the () then.
 
 It is allowed to define another function inside a function body.
+
+						*optional-function-argument*
+You can provide default values for positional named arguments.  This makes
+them optional for function calls.  When a positional argument is not
+specified at a call, the default expression is used to initialize it.
+This only works for functions declared with |function|, not for lambda
+expressions |expr-lambda|.
+
+Example: >
+  function Something(key, value = 10)
+     echo a:key .. ": " .. a:value
+  endfunction
+  call Something('empty')	"empty: 10"
+  call Something('key', 20)	"key: 20"
+
+The argument default expressions are evaluated at the time of the function
+call, not definition.  Thus it is possible to use an expression which is
+invalid the moment the function is defined.  The expressions are are also only
+evaluated when arguments are not specified during a call.
+
+You can pass |v:none| to use the default expression.  Note that this means you
+cannot pass v:none as an ordinary value when an argument has a default
+expression.
+
+Example: >
+  function Something(a = 10, b = 20, c = 30)
+  endfunction
+  call Something(1, v:none, 3)	    " b = 20
+<
+								*E989*
+Optional arguments with default expressions must occur after any mandatory
+arguments.  You can use "..." after all optional named arguments.
+
+It is possible for later argument defaults to refer to prior arguments,
+but not the other way around.  They must be prefixed with "a:", as with all
+arguments.
+
+Example that works: >
+  :function Okay(mandatory, optional = a:mandatory)
+  :endfunction
+Example that does NOT work: >
+  :function NoGood(first = a:second, second = 10)
+  :endfunction
+<
+When not using "...", the number of arguments in a function call must be equal
+to the number of mandatory named arguments.  When using "...", the number of
+arguments may be larger.
 
 							*local-variables*
 Inside a function local variables can be used.  These will disappear when the

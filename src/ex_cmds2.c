@@ -325,7 +325,7 @@ timer_callback(timer_T *timer)
     argv[0].vval.v_number = (varnumber_T)timer->tr_id;
     argv[1].v_type = VAR_UNKNOWN;
 
-    call_func(timer->tr_callback, (int)STRLEN(timer->tr_callback),
+    call_func(timer->tr_callback, -1,
 			&rettv, 1, argv, NULL, 0L, 0L, &dummy, TRUE,
 			timer->tr_partial, NULL);
     clear_tv(&rettv);
@@ -1190,9 +1190,9 @@ dialog_changed(
     else
 	ret = vim_dialog_yesnocancel(VIM_QUESTION, NULL, buff, 1);
 
-    /* Init ea pseudo-structure, this is needed for the check_overwrite()
-     * function. */
-    ea.append = ea.forceit = FALSE;
+    // Init ea pseudo-structure, this is needed for the check_overwrite()
+    // function.
+    vim_memset(&ea, 0, sizeof(ea));
 
     if (ret == VIM_YES)
     {
