@@ -12,6 +12,7 @@
  *
  * TODO:
  * - Adjust text property column and length when text is inserted/deleted.
+ *   -> :substitute with multiple matches, issue #4427
  *   -> a :substitute with a multi-line match
  *   -> search for changed_bytes() from misc1.c
  *   -> search for mark_col_adjust()
@@ -238,6 +239,9 @@ f_prop_add(typval_T *argvars, typval_T *rettv UNUSED)
 	return;
     }
 
+    if (buf->b_ml.ml_mfp == NULL)
+	ml_open(buf);
+
     for (lnum = start_lnum; lnum <= end_lnum; ++lnum)
     {
 	colnr_T col;	// start column
@@ -327,7 +331,7 @@ get_text_props(buf_T *buf, linenr_T lnum, char_u **props, int will_change)
 
     // Be quick when no text property types have been defined or the buffer,
     // unless we are adding one.
-    if (!buf->b_has_textprop && !will_change)
+    if ((!buf->b_has_textprop && !will_change) || buf->b_ml.ml_mfp == NULL)
 	return 0;
 
     // Fetch the line to get the ml_line_len field updated.
@@ -678,7 +682,7 @@ prop_type_set(typval_T *argvars, int add)
 	    semsg(_("E969: Property type %s already defined"), name);
 	    return;
 	}
-	prop = (proptype_T *)alloc_clear((int)(sizeof(proptype_T) + STRLEN(name)));
+	prop = (proptype_T *)alloc_clear(sizeof(proptype_T) + STRLEN(name));
 	if (prop == NULL)
 	    return;
 	STRCPY(prop->pt_name, name);
@@ -1203,7 +1207,7 @@ join_prop_lines(
     size_t	oldproplen;
     char_u	*props;
     int		i;
-    int		len;
+    size_t	len;
     char_u	*line;
     size_t	l;
 
@@ -1218,8 +1222,8 @@ join_prop_lines(
     // get existing properties of the joined line
     oldproplen = get_text_props(curbuf, lnum, &props, FALSE);
 
-    len = (int)STRLEN(newp) + 1;
-    line = alloc(len + (oldproplen + proplen) * (int)sizeof(textprop_T));
+    len = STRLEN(newp) + 1;
+    line = alloc((int)(len + (oldproplen + proplen) * sizeof(textprop_T)));
     if (line == NULL)
 	return;
     mch_memmove(line, newp, len);
@@ -1236,7 +1240,7 @@ join_prop_lines(
 	    vim_free(prop_lines[i]);
 	}
 
-    ml_replace_len(lnum, line, len, TRUE, FALSE);
+    ml_replace_len(lnum, line, (colnr_T)len, TRUE, FALSE);
     vim_free(newp);
     vim_free(prop_lines);
     vim_free(prop_lengths);
