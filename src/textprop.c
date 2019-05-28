@@ -129,7 +129,7 @@ get_bufnr_from_arg(typval_T *arg, buf_T **buf)
     di = dict_find(arg->vval.v_dict, (char_u *)"bufnr", -1);
     if (di != NULL)
     {
-	*buf = tv_get_buf(&di->di_tv, FALSE);
+	*buf = get_buf_arg(&di->di_tv);
 	if (*buf == NULL)
 	    return FAIL;
     }
@@ -142,23 +142,8 @@ get_bufnr_from_arg(typval_T *arg, buf_T **buf)
     void
 f_prop_add(typval_T *argvars, typval_T *rettv UNUSED)
 {
-    linenr_T	lnum;
     linenr_T	start_lnum;
-    linenr_T	end_lnum;
     colnr_T	start_col;
-    colnr_T	end_col;
-    dict_T	*dict;
-    char_u	*type_name;
-    proptype_T	*type;
-    buf_T	*buf = curbuf;
-    int		id = 0;
-    char_u	*newtext;
-    int		proplen;
-    size_t	textlen;
-    char_u	*props = NULL;
-    char_u	*newprops;
-    textprop_T	tmp_prop;
-    int		i;
 
     start_lnum = tv_get_number(&argvars[0]);
     start_col = tv_get_number(&argvars[1]);
@@ -172,7 +157,38 @@ f_prop_add(typval_T *argvars, typval_T *rettv UNUSED)
 	emsg(_(e_dictreq));
 	return;
     }
-    dict = argvars[2].vval.v_dict;
+
+    prop_add_common(start_lnum, start_col, argvars[2].vval.v_dict,
+							  curbuf, &argvars[2]);
+}
+
+/*
+ * Shared between prop_add() and popup_create().
+ * "dict_arg" is the function argument of a dict containing "bufnr".
+ * it is NULL for popup_create().
+ */
+    void
+prop_add_common(
+	linenr_T    start_lnum,
+	colnr_T	    start_col,
+	dict_T	    *dict,
+	buf_T	    *default_buf,
+	typval_T    *dict_arg)
+{
+    linenr_T	lnum;
+    linenr_T	end_lnum;
+    colnr_T	end_col;
+    char_u	*type_name;
+    proptype_T	*type;
+    buf_T	*buf = default_buf;
+    int		id = 0;
+    char_u	*newtext;
+    int		proplen;
+    size_t	textlen;
+    char_u	*props = NULL;
+    char_u	*newprops;
+    textprop_T	tmp_prop;
+    int		i;
 
     if (dict == NULL || dict_find(dict, (char_u *)"type", -1) == NULL)
     {
@@ -221,7 +237,7 @@ f_prop_add(typval_T *argvars, typval_T *rettv UNUSED)
     if (dict_find(dict, (char_u *)"id", -1) != NULL)
 	id = dict_get_number(dict, (char_u *)"id");
 
-    if (get_bufnr_from_arg(&argvars[2], &buf) == FAIL)
+    if (dict_arg != NULL && get_bufnr_from_arg(dict_arg, &buf) == FAIL)
 	return;
 
     type = lookup_prop_type(type_name, buf);
@@ -278,12 +294,12 @@ f_prop_add(typval_T *argvars, typval_T *rettv UNUSED)
 	mch_memmove(newtext, buf->b_ml.ml_line_ptr, textlen);
 
 	// Find the index where to insert the new property.
-	// Since the text properties are not aligned properly when stored with the
-	// text, we need to copy them as bytes before using it as a struct.
+	// Since the text properties are not aligned properly when stored with
+	// the text, we need to copy them as bytes before using it as a struct.
 	for (i = 0; i < proplen; ++i)
 	{
 	    mch_memmove(&tmp_prop, props + i * sizeof(textprop_T),
-							       sizeof(textprop_T));
+							   sizeof(textprop_T));
 	    if (tmp_prop.tp_col >= col)
 		break;
 	}
@@ -298,7 +314,7 @@ f_prop_add(typval_T *argvars, typval_T *rettv UNUSED)
 	tmp_prop.tp_flags = (lnum > start_lnum ? TP_FLAG_CONT_PREV : 0)
 			  | (lnum < end_lnum ? TP_FLAG_CONT_NEXT : 0);
 	mch_memmove(newprops + i * sizeof(textprop_T), &tmp_prop,
-							       sizeof(textprop_T));
+							   sizeof(textprop_T));
 
 	if (i < proplen)
 	    mch_memmove(newprops + (i + 1) * sizeof(textprop_T),
@@ -560,13 +576,10 @@ f_prop_remove(typval_T *argvars, typval_T *rettv)
     }
 
     dict = argvars[0].vval.v_dict;
-    di = dict_find(dict, (char_u *)"bufnr", -1);
-    if (di != NULL)
-    {
-	buf = tv_get_buf(&di->di_tv, FALSE);
-	if (buf == NULL)
-	    return;
-    }
+    if (get_bufnr_from_arg(&argvars[0], &buf) == FAIL)
+	return;
+    if (buf->b_ml.ml_mfp == NULL)
+	return;
 
     di = dict_find(dict, (char_u*)"all", -1);
     if (di != NULL)
@@ -628,7 +641,7 @@ f_prop_remove(typval_T *argvars, typval_T *rettv)
 			buf->b_ml.ml_flags |= ML_LINE_DIRTY;
 
 			cur_prop = buf->b_ml.ml_line_ptr + len
-							+ idx * sizeof(textprop_T);
+						    + idx * sizeof(textprop_T);
 		    }
 
 		    taillen = buf->b_ml.ml_line_len - len
@@ -1223,7 +1236,7 @@ join_prop_lines(
     oldproplen = get_text_props(curbuf, lnum, &props, FALSE);
 
     len = STRLEN(newp) + 1;
-    line = alloc((int)(len + (oldproplen + proplen) * sizeof(textprop_T)));
+    line = alloc(len + (oldproplen + proplen) * sizeof(textprop_T));
     if (line == NULL)
 	return;
     mch_memmove(line, newp, len);
