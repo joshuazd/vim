@@ -13,7 +13,6 @@ SCRIPTS_FIRST = \
 
 # Tests that run on all systems.
 SCRIPTS_ALL = \
-	test3.out \
 	test39.out \
 	test42.out \
 	test44.out \
@@ -229,6 +228,7 @@ NEW_TESTS = \
 	test_signs \
 	test_smartindent \
 	test_sort \
+	test_sound \
 	test_source \
 	test_source_utf8 \
 	test_spell \
@@ -400,6 +400,7 @@ NEW_TESTS_RES = \
 	test_signals.res \
 	test_signs.res \
 	test_smartindent.res \
+	test_sound.res \
 	test_source.res \
 	test_spell.res \
 	test_startup.res \

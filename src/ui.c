@@ -691,7 +691,7 @@ ui_breakcheck_force(int force)
     if (save_updating_screen)
 	updating_screen = TRUE;
     else
-	reset_updating_screen(FALSE);
+	after_updating_screen(FALSE);
 
     recursive = FALSE;
 }
@@ -1897,7 +1897,7 @@ get_input_buf(void)
     garray_T	*gap;
 
     /* We use a growarray to store the data pointer and the length. */
-    gap = (garray_T *)alloc(sizeof(garray_T));
+    gap = ALLOC_ONE(garray_T);
     if (gap != NULL)
     {
 	/* Add one to avoid a zero size. */
@@ -3242,15 +3242,19 @@ retnomove:
 	    || curwin->w_cursor.col != old_cursor.col)
 	count |= CURSOR_MOVED;		/* Cursor has moved */
 
-#ifdef FEAT_FOLDING
+# ifdef FEAT_FOLDING
     if (mouse_char == '+')
 	count |= MOUSE_FOLD_OPEN;
     else if (mouse_char != ' ')
 	count |= MOUSE_FOLD_CLOSE;
-#endif
+# endif
 
     return count;
 }
+#endif
+
+// Functions also used for popup windows.
+#if defined(FEAT_MOUSE) || defined(FEAT_TEXT_PROP) || defined(PROTO)
 
 /*
  * Compute the position in the buffer line from the posn on the screen in
@@ -3347,7 +3351,7 @@ mouse_comp_pos(
  * Returns NULL when something is wrong.
  */
     win_T *
-mouse_find_win(int *rowp, int *colp UNUSED)
+mouse_find_win(int *rowp, int *colp)
 {
     frame_T	*fp;
     win_T	*wp;

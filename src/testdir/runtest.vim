@@ -42,6 +42,10 @@ if &lines < 24 || &columns < 80
   cquit
 endif
 
+if has('reltime')
+  let s:start_time = reltime()
+endif
+
 " Common with all tests on all systems.
 source setup.vim
 
@@ -99,6 +103,9 @@ endfunc
 
 func RunTheTest(test)
   echo 'Executing ' . a:test
+  if has('reltime')
+    let func_start = reltime()
+  endif
 
   " Avoid stopping at the "hit enter" prompt
   set nomore
@@ -125,9 +132,6 @@ func RunTheTest(test)
       call add(v:errors, 'Caught exception in SetUp() before ' . a:test . ': ' . v:exception . ' @ ' . v:throwpoint)
     endtry
   endif
-
-  call add(s:messages, 'Executing ' . a:test)
-  let s:done += 1
 
   if a:test =~ 'Test_nocatch_'
     " Function handles errors itself.  This avoids skipping commands after the
@@ -182,6 +186,13 @@ func RunTheTest(test)
   endwhile
 
   exe 'cd ' . save_cwd
+
+  let message = 'Executed ' . a:test
+  if has('reltime')
+    let message ..= ' in ' .. reltimestr(reltime(func_start)) .. ' seconds'
+  endif
+  call add(s:messages, message)
+  let s:done += 1
 endfunc
 
 func AfterTheTest()
@@ -232,6 +243,9 @@ func FinishTesting()
   else
     let message = 'Executed ' . s:done . (s:done > 1 ? ' tests' : ' test')
   endif
+  if has('reltime')
+    let message ..= ' in ' .. reltimestr(reltime(s:start_time)) .. ' seconds'
+  endif
   echo message
   call add(s:messages, message)
   if s:fail > 0
@@ -268,6 +282,9 @@ if expand('%') =~ 'test_vimscript.vim'
 else
   try
     source %
+  catch /^\cskipped/
+    call add(s:messages, '    Skipped')
+    call add(s:skipped, 'SKIPPED ' . expand('%') . ': ' . substitute(v:exception, '^\S*\s\+', '',  ''))
   catch
     let s:fail += 1
     call add(s:errors, 'Caught exception: ' . v:exception . ' @ ' . v:throwpoint)
