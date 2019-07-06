@@ -121,10 +121,6 @@ static int redrawing_for_callback = 0;
  */
 static schar_T	*current_ScreenLine;
 
-#ifdef FEAT_TEXT_PROP
-static void may_update_popup_mask(int type);
-static void update_popups(void);
-#endif
 static void win_update(win_T *wp);
 static void win_redr_status(win_T *wp, int ignore_pum);
 static void win_draw_end(win_T *wp, int c1, int c2, int draw_margin, int row, int endrow, hlf_T hl);
@@ -826,7 +822,7 @@ update_screen(int type_arg)
 
 #ifdef FEAT_TEXT_PROP
     // Display popup windows on top of the windows.
-    update_popups();
+    update_popups(win_update);
 #endif
 
 #ifdef FEAT_GUI
@@ -879,7 +875,7 @@ update_prepare(void)
 #endif
 #ifdef FEAT_TEXT_PROP
     // Update popup_mask if needed.
-    may_update_popup_mask(0);
+    may_update_popup_mask(must_redraw);
 #endif
 }
 
@@ -1001,7 +997,7 @@ update_debug_sign(buf_T *buf, linenr_T lnum)
  * Get 'wincolor' attribute for window "wp".  If not set and "wp" is a popup
  * window then get the "Pmenu" highlight attribute.
  */
-    static int
+    int
 get_wcr_attr(win_T *wp)
 {
     int wcr_attr = 0;
@@ -1009,311 +1005,11 @@ get_wcr_attr(win_T *wp)
     if (*wp->w_p_wcr != NUL)
 	wcr_attr = syn_name2attr(wp->w_p_wcr);
 #ifdef FEAT_TEXT_PROP
-    if (bt_popup(wp->w_buffer) && wcr_attr == 0)
+    if (WIN_IS_POPUP(wp) && wcr_attr == 0)
 	wcr_attr = HL_ATTR(HLF_PNI);
 #endif
     return wcr_attr;
 }
-
-#ifdef FEAT_TEXT_PROP
-
-/*
- * Update "popup_mask" if needed.
- * Also recomputes the popup size and positions.
- * Also updates "popup_visible".
- * Also marks window lines for redrawing.
- */
-    static void
-may_update_popup_mask(int type)
-{
-    win_T	*wp;
-    short	*mask;
-    int		line, col;
-
-    if (popup_mask_tab != curtab)
-	popup_mask_refresh = TRUE;
-    if (!popup_mask_refresh)
-    {
-	// Check if any buffer has changed.
-	for (wp = first_popupwin; wp != NULL; wp = wp->w_next)
-	    if (wp->w_popup_last_changedtick != CHANGEDTICK(wp->w_buffer))
-		popup_mask_refresh = TRUE;
-	for (wp = curtab->tp_first_popupwin; wp != NULL; wp = wp->w_next)
-	    if (wp->w_popup_last_changedtick != CHANGEDTICK(wp->w_buffer))
-		popup_mask_refresh = TRUE;
-	if (!popup_mask_refresh)
-	    return;
-    }
-
-    // Need to update the mask, something has changed.
-    popup_mask_refresh = FALSE;
-    popup_mask_tab = curtab;
-    popup_visible = FALSE;
-
-    // If redrawing everything, just update "popup_mask".
-    // If redrawing only what is needed, update "popup_mask_next" and then
-    // compare with "popup_mask" to see what changed.
-    if (type >= SOME_VALID)
-	mask = popup_mask;
-    else
-	mask = popup_mask_next;
-    vim_memset(mask, 0, screen_Rows * screen_Columns * sizeof(short));
-
-    // Find the window with the lowest zindex that hasn't been handled yet,
-    // so that the window with a higher zindex overwrites the value in
-    // popup_mask.
-    popup_reset_handled();
-    while ((wp = find_next_popup(TRUE)) != NULL)
-    {
-	int	    height_extra, width_extra;
-
-	popup_visible = TRUE;
-
-	// Recompute the position if the text changed.
-	if (wp->w_popup_last_changedtick != CHANGEDTICK(wp->w_buffer))
-	    popup_adjust_position(wp);
-
-	// the width and height are for the inside, add the padding and
-	// border
-	height_extra = wp->w_popup_padding[0] + wp->w_popup_border[0]
-			      + wp->w_popup_padding[2] + wp->w_popup_border[2];
-	width_extra = wp->w_popup_padding[3] + wp->w_popup_border[3]
-			      + wp->w_popup_padding[1] + wp->w_popup_border[1];
-
-	for (line = wp->w_winrow;
-		line < wp->w_winrow + wp->w_height + height_extra
-						 && line < screen_Rows; ++line)
-	    for (col = wp->w_wincol;
-		 col < wp->w_wincol + wp->w_width + width_extra
-						&& col < screen_Columns; ++col)
-		mask[line * screen_Columns + col] = wp->w_zindex;
-    }
-
-    // Only check which lines are to be updated if not already
-    // updating all lines.
-    if (mask == popup_mask_next)
-	for (line = 0; line < screen_Rows; ++line)
-	{
-	    int	    col_done = 0;
-
-	    for (col = 0; col < screen_Columns; ++col)
-	    {
-		int off = line * screen_Columns + col;
-
-		if (popup_mask[off] != popup_mask_next[off])
-		{
-		    popup_mask[off] = popup_mask_next[off];
-
-		    // The screen position "line" / "col" needs to be redrawn.
-		    // Figure out what window that is and update w_redraw_top
-		    // and w_redr_bot.  Only needs to be done for each window
-		    // line.
-		    if (col >= col_done)
-		    {
-			linenr_T	lnum;
-			int		line_cp = line;
-			int		col_cp = col;
-
-			// find the window where the row is in
-			wp = mouse_find_win(&line_cp, &col_cp);
-			if (wp != NULL)
-			{
-			    if (line_cp >= wp->w_height)
-				// In (or below) status line
-				wp->w_redr_status = TRUE;
-			    // compute the position in the buffer line from the
-			    // position on the screen
-			    else if (mouse_comp_pos(wp, &line_cp, &col_cp,
-									&lnum))
-				// past bottom
-				wp->w_redr_status = TRUE;
-			    else
-				redrawWinline(wp, lnum);
-
-			    // This line is going to be redrawn, no need to
-			    // check until the right side of the window.
-			    col_done = wp->w_wincol + wp->w_width - 1;
-			}
-		    }
-		}
-	    }
-	}
-}
-
-/*
- * Return a string of "len" spaces in IObuff.
- */
-    static char_u *
-get_spaces(int len)
-{
-    vim_memset(IObuff, ' ', (size_t)len);
-    IObuff[len] = NUL;
-    return IObuff;
-}
-
-    static void
-update_popups(void)
-{
-    win_T   *wp;
-    int	    top_off;
-    int	    left_off;
-    int	    total_width;
-    int	    total_height;
-    int	    popup_attr;
-    int	    border_attr[4];
-    int	    border_char[8];
-    char_u  buf[MB_MAXBYTES];
-    int	    row;
-    int	    i;
-
-    // Find the window with the lowest zindex that hasn't been updated yet,
-    // so that the window with a higher zindex is drawn later, thus goes on
-    // top.
-    popup_reset_handled();
-    while ((wp = find_next_popup(TRUE)) != NULL)
-    {
-	// This drawing uses the zindex of the popup window, so that it's on
-	// top of the text but doesn't draw when another popup with higher
-	// zindex is on top of the character.
-	screen_zindex = wp->w_zindex;
-
-	// adjust w_winrow and w_wincol for border and padding, since
-	// win_update() doesn't handle them.
-	top_off = wp->w_popup_padding[0] + wp->w_popup_border[0];
-	left_off = wp->w_popup_padding[3] + wp->w_popup_border[3];
-	wp->w_winrow += top_off;
-	wp->w_wincol += left_off;
-
-	// Draw the popup text.
-	win_update(wp);
-
-	wp->w_winrow -= top_off;
-	wp->w_wincol -= left_off;
-
-	total_width = wp->w_popup_border[3] + wp->w_popup_padding[3]
-		+ wp->w_width + wp->w_popup_padding[1] + wp->w_popup_border[1];
-	total_height = wp->w_popup_border[0] + wp->w_popup_padding[0]
-		+ wp->w_height + wp->w_popup_padding[2] + wp->w_popup_border[2];
-	popup_attr = get_wcr_attr(wp);
-
-	// We can only use these line drawing characters when 'encoding' is
-	// "utf-8" and 'ambiwidth' is "single".
-	if (enc_utf8 && *p_ambw == 's')
-	{
-	    border_char[0] = border_char[2] = 0x2550;
-	    border_char[1] = border_char[3] = 0x2551;
-	    border_char[4] = 0x2554;
-	    border_char[5] = 0x2557;
-	    border_char[6] = 0x255d;
-	    border_char[7] = 0x255a;
-	}
-	else
-	{
-	    border_char[0] = border_char[2] = '-';
-	    border_char[1] = border_char[3] = '|';
-	    for (i = 4; i < 8; ++i)
-		border_char[i] = '+';
-	}
-	for (i = 0; i < 8; ++i)
-	    if (wp->w_border_char[i] != 0)
-		border_char[i] = wp->w_border_char[i];
-
-	for (i = 0; i < 4; ++i)
-	{
-	    border_attr[i] = popup_attr;
-	    if (wp->w_border_highlight[i] != NULL)
-		border_attr[i] = syn_name2attr(wp->w_border_highlight[i]);
-	}
-
-	if (wp->w_popup_border[0] > 0)
-	{
-	    // top border
-	    screen_fill(wp->w_winrow, wp->w_winrow + 1,
-		    wp->w_wincol,
-		    wp->w_wincol + total_width,
-		    wp->w_popup_border[3] != 0
-					     ? border_char[4] : border_char[0],
-		    border_char[0], border_attr[0]);
-	    if (wp->w_popup_border[1] > 0)
-	    {
-		buf[mb_char2bytes(border_char[5], buf)] = NUL;
-		screen_puts(buf, wp->w_winrow,
-			       wp->w_wincol + total_width - 1, border_attr[1]);
-	    }
-	}
-
-	if (wp->w_popup_padding[0] > 0)
-	{
-	    // top padding
-	    row = wp->w_winrow + wp->w_popup_border[0];
-	    screen_fill(row, row + wp->w_popup_padding[0],
-		    wp->w_wincol + wp->w_popup_border[3],
-		    wp->w_wincol + total_width - wp->w_popup_border[1],
-							 ' ', ' ', popup_attr);
-	}
-
-	for (row = wp->w_winrow + wp->w_popup_border[0];
-		row < wp->w_winrow + total_height - wp->w_popup_border[2];
-		    ++row)
-	{
-	    // left border
-	    if (wp->w_popup_border[3] > 0)
-	    {
-		buf[mb_char2bytes(border_char[3], buf)] = NUL;
-		screen_puts(buf, row, wp->w_wincol, border_attr[3]);
-	    }
-	    // left padding
-	    if (wp->w_popup_padding[3] > 0)
-		screen_puts(get_spaces(wp->w_popup_padding[3]), row,
-			wp->w_wincol + wp->w_popup_border[3], popup_attr);
-	    // right border
-	    if (wp->w_popup_border[1] > 0)
-	    {
-		buf[mb_char2bytes(border_char[1], buf)] = NUL;
-		screen_puts(buf, row,
-			       wp->w_wincol + total_width - 1, border_attr[1]);
-	    }
-	    // right padding
-	    if (wp->w_popup_padding[1] > 0)
-		screen_puts(get_spaces(wp->w_popup_padding[1]), row,
-			wp->w_wincol + wp->w_popup_border[3]
-			   + wp->w_popup_padding[3] + wp->w_width, popup_attr);
-	}
-
-	if (wp->w_popup_padding[2] > 0)
-	{
-	    // bottom padding
-	    row = wp->w_winrow + wp->w_popup_border[0]
-				       + wp->w_popup_padding[0] + wp->w_height;
-	    screen_fill(row, row + wp->w_popup_padding[2],
-		    wp->w_wincol + wp->w_popup_border[3],
-		    wp->w_wincol + total_width - wp->w_popup_border[1],
-							 ' ', ' ', popup_attr);
-	}
-
-	if (wp->w_popup_border[2] > 0)
-	{
-	    // bottom border
-	    row = wp->w_winrow + total_height - 1;
-	    screen_fill(row , row + 1,
-		    wp->w_wincol,
-		    wp->w_wincol + total_width,
-		    wp->w_popup_border[3] != 0
-					     ? border_char[7] : border_char[2],
-		    border_char[2], border_attr[2]);
-	    if (wp->w_popup_border[1] > 0)
-	    {
-		buf[mb_char2bytes(border_char[6], buf)] = NUL;
-		screen_puts(buf, row,
-			       wp->w_wincol + total_width - 1, border_attr[2]);
-	    }
-	}
-
-	// Back to the normal zindex.
-	screen_zindex = 0;
-    }
-}
-#endif
 
 #if defined(FEAT_GUI) || defined(PROTO)
 /*
@@ -1355,7 +1051,7 @@ updateWindow(win_T *wp)
 
 #ifdef FEAT_TEXT_PROP
     // Display popup windows on top of everything.
-    update_popups();
+    update_popups(win_update);
 #endif
 
     update_finish();
@@ -1859,7 +1555,7 @@ win_update(win_T *wp)
 	if (mid_start == 0)
 	{
 	    mid_end = wp->w_height;
-	    if (ONE_WINDOW)
+	    if (ONE_WINDOW && !WIN_IS_POPUP(wp))
 	    {
 		/* Clear the screen when it was not done by win_del_lines() or
 		 * win_ins_lines() above, "screen_cleared" is FALSE or MAYBE
@@ -2385,9 +2081,7 @@ win_update(win_T *wp)
 		    && wp->w_lines[idx].wl_lnum == lnum
 		    && lnum > wp->w_topline
 		    && !(dy_flags & (DY_LASTLINE | DY_TRUNCATE))
-#ifdef FEAT_TEXT_PROP
-		    && !bt_popup(wp->w_buffer)
-#endif
+		    && !WIN_IS_POPUP(wp)
 		    && srow + wp->w_lines[idx].wl_size > wp->w_height
 #ifdef FEAT_DIFF
 		    && diff_check_fill(wp, lnum) == 0
@@ -2544,7 +2238,7 @@ win_update(win_T *wp)
 	}
 #endif
 #ifdef FEAT_TEXT_PROP
-	else if (bt_popup(wp->w_buffer))
+	else if (WIN_IS_POPUP(wp))
 	{
 	    // popup line that doesn't fit is left as-is
 	    wp->w_botline = lnum;
@@ -2610,11 +2304,8 @@ win_update(win_T *wp)
 
 	// Make sure the rest of the screen is blank
 	// put '~'s on rows that aren't part of the file.
-	win_draw_end(wp,
-#ifdef FEAT_TEXT_PROP
-		bt_popup(wp->w_buffer) ? ' ' :
-#endif
-				  '~', ' ', FALSE, row, wp->w_height, HLF_EOB);
+	win_draw_end(wp, WIN_IS_POPUP(wp) ? ' ' : '~',
+				       ' ', FALSE, row, wp->w_height, HLF_EOB);
     }
 
 #ifdef SYN_TIME_LIMIT
@@ -3341,6 +3032,108 @@ text_prop_compare(const void *s1, const void *s2)
 }
 #endif
 
+#ifdef FEAT_SIGNS
+/*
+ * Get information needed to display the sign in line 'lnum' in window 'wp'.
+ * If 'nrcol' is TRUE, the sign is going to be displayed in the number column.
+ * Otherwise the sign is going to be displayed in the sign column.
+ */
+    static void
+get_sign_display_info(
+	int		nrcol,
+	win_T		*wp,
+	linenr_T	lnum UNUSED,
+	sign_attrs_T	*sattr,
+	int		wcr_attr,
+	int		row,
+	int		startrow,
+	int		filler_lines UNUSED,
+	int		filler_todo UNUSED,
+	int		*c_extrap,
+	int		*c_finalp,
+	char_u		*extra,
+	char_u		**pp_extra,
+	int		*n_extrap,
+	int		*char_attrp)
+{
+    int	text_sign;
+# ifdef FEAT_SIGN_ICONS
+    int	icon_sign;
+# endif
+
+    // Draw two cells with the sign value or blank.
+    *c_extrap = ' ';
+    *c_finalp = NUL;
+    if (nrcol)
+	*n_extrap = number_width(wp) + 1;
+    else
+    {
+	*char_attrp = hl_combine_attr(wcr_attr, HL_ATTR(HLF_SC));
+	*n_extrap = 2;
+    }
+
+    if (row == startrow
+#ifdef FEAT_DIFF
+	    + filler_lines && filler_todo <= 0
+#endif
+       )
+    {
+	text_sign = (sattr->text != NULL) ? sattr->typenr : 0;
+# ifdef FEAT_SIGN_ICONS
+	icon_sign = (sattr->icon != NULL) ? sattr->typenr : 0;
+	if (gui.in_use && icon_sign != 0)
+	{
+	    // Use the image in this position.
+	    if (nrcol)
+	    {
+		*c_extrap = NUL;
+		sprintf((char *)extra, "%-*c ", number_width(wp), SIGN_BYTE);
+		*pp_extra = extra;
+		*n_extrap = (int)STRLEN(*pp_extra);
+	    }
+	    else
+		*c_extrap = SIGN_BYTE;
+#  ifdef FEAT_NETBEANS_INTG
+	    if (netbeans_active() && (buf_signcount(wp->w_buffer, lnum) > 1))
+	    {
+		if (nrcol)
+		{
+		    *c_extrap = NUL;
+		    sprintf((char *)extra, "%-*c ", number_width(wp),
+							MULTISIGN_BYTE);
+		    *pp_extra = extra;
+		    *n_extrap = (int)STRLEN(*pp_extra);
+		}
+		else
+		    *c_extrap = MULTISIGN_BYTE;
+	    }
+#  endif
+	    *c_finalp = NUL;
+	    *char_attrp = icon_sign;
+	}
+	else
+# endif
+	    if (text_sign != 0)
+	    {
+		*pp_extra = sattr->text;
+		if (*pp_extra != NULL)
+		{
+		    if (nrcol)
+		    {
+			sprintf((char *)extra, "%*s ", number_width(wp),
+								*pp_extra);
+			*pp_extra = extra;
+		    }
+		    *c_extrap = NUL;
+		    *c_finalp = NUL;
+		    *n_extrap = (int)STRLEN(*pp_extra);
+		}
+		*char_attrp = sattr->texthl;
+	    }
+    }
+}
+#endif
+
 /*
  * Display line "lnum" of window 'wp' on the screen.
  * Start at row "startrow", stop when "endrow" is reached.
@@ -3357,32 +3150,32 @@ win_line(
     int		nochange UNUSED,	// not updating for changed text
     int		number_only)		// only update the number column
 {
-    int		col = 0;		/* visual column on screen */
-    unsigned	off;			/* offset in ScreenLines/ScreenAttrs */
-    int		c = 0;			/* init for GCC */
-    long	vcol = 0;		/* virtual column (for tabs) */
+    int		col = 0;		// visual column on screen
+    unsigned	off;			// offset in ScreenLines/ScreenAttrs
+    int		c = 0;			// init for GCC
+    long	vcol = 0;		// virtual column (for tabs)
 #ifdef FEAT_LINEBREAK
-    long	vcol_sbr = -1;		/* virtual column after showbreak */
+    long	vcol_sbr = -1;		// virtual column after showbreak
 #endif
-    long	vcol_prev = -1;		/* "vcol" of previous character */
-    char_u	*line;			/* current line */
-    char_u	*ptr;			/* current position in "line" */
-    int		row;			/* row in the window, excl w_winrow */
-    int		screen_row;		/* row on the screen, incl w_winrow */
+    long	vcol_prev = -1;		// "vcol" of previous character
+    char_u	*line;			// current line
+    char_u	*ptr;			// current position in "line"
+    int		row;			// row in the window, excl w_winrow
+    int		screen_row;		// row on the screen, incl w_winrow
 
-    char_u	extra[18];		/* "%ld" and 'fdc' must fit in here */
-    int		n_extra = 0;		/* number of extra chars */
-    char_u	*p_extra = NULL;	/* string of extra chars, plus NUL */
-    char_u	*p_extra_free = NULL;   /* p_extra needs to be freed */
-    int		c_extra = NUL;		/* extra chars, all the same */
-    int		c_final = NUL;		/* final char, mandatory if set */
-    int		extra_attr = 0;		/* attributes when n_extra != 0 */
-    static char_u *at_end_str = (char_u *)""; /* used for p_extra when
-					   displaying lcs_eol at end-of-line */
-    int		lcs_eol_one = lcs_eol;	/* lcs_eol until it's been used */
-    int		lcs_prec_todo = lcs_prec;   /* lcs_prec until it's been used */
+    char_u	extra[21];		// "%ld " and 'fdc' must fit in here
+    int		n_extra = 0;		// number of extra chars
+    char_u	*p_extra = NULL;	// string of extra chars, plus NUL
+    char_u	*p_extra_free = NULL;   // p_extra needs to be freed
+    int		c_extra = NUL;		// extra chars, all the same
+    int		c_final = NUL;		// final char, mandatory if set
+    int		extra_attr = 0;		// attributes when n_extra != 0
+    static char_u *at_end_str = (char_u *)""; // used for p_extra when
+					   // displaying lcs_eol at end-of-line
+    int		lcs_eol_one = lcs_eol;	// lcs_eol until it's been used
+    int		lcs_prec_todo = lcs_prec;   // lcs_prec until it's been used
 
-    /* saved "extra" items for when draw_state becomes WL_LINE (again) */
+    // saved "extra" items for when draw_state becomes WL_LINE (again)
     int		saved_n_extra = 0;
     char_u	*saved_p_extra = NULL;
     int		saved_c_extra = 0;
@@ -3456,9 +3249,11 @@ win_line(
     int		mb_c = 0;		/* decoded multi-byte character */
     int		mb_utf8 = FALSE;	/* screen char is UTF-8 char */
     int		u8cc[MAX_MCO];		/* composing UTF-8 chars */
+#if defined(FEAT_DIFF) || defined(FEAT_SIGNS)
+    int		filler_lines = 0;	/* nr of filler lines to be drawn */
+    int		filler_todo = 0;	/* nr of filler lines still to do + 1 */
+#endif
 #ifdef FEAT_DIFF
-    int		filler_lines;		/* nr of filler lines to be drawn */
-    int		filler_todo;		/* nr of filler lines still to do + 1 */
     hlf_T	diff_hlf = (hlf_T)0;	/* type of diff highlighting */
     int		change_start = MAXCOL;	/* first col of changed area */
     int		change_end = -1;	/* last col of changed area */
@@ -3472,6 +3267,10 @@ win_line(
 	|| defined(FEAT_SYN_HL) || defined(FEAT_DIFF)
 # define LINE_ATTR
     int		line_attr = 0;		/* attribute for the whole line */
+#endif
+#ifdef FEAT_SIGNS
+    int		sign_present = FALSE;
+    sign_attrs_T sattr;
 #endif
 #ifdef FEAT_SEARCH_EXTRA
     matchitem_T *cur;			/* points to the match list */
@@ -3791,12 +3590,15 @@ win_line(
     filler_todo = filler_lines;
 #endif
 
+#ifdef FEAT_SIGNS
+    sign_present = buf_get_signattrs(wp->w_buffer, lnum, &sattr);
+#endif
+
 #ifdef LINE_ATTR
 # ifdef FEAT_SIGNS
     /* If this line has a sign with line highlighting set line_attr. */
-    v = buf_getsigntype(wp->w_buffer, lnum, SIGN_LINEHL);
-    if (v != 0)
-	line_attr = sign_get_attr((int)v, TRUE);
+    if (sign_present)
+	line_attr = sattr.linehl;
 # endif
 # if defined(FEAT_QUICKFIX)
     /* Highlight the current line in the quickfix window. */
@@ -3870,7 +3672,7 @@ win_line(
 	area_highlighting = TRUE;
     }
 #ifdef FEAT_TEXT_PROP
-    if (bt_popup(wp->w_buffer))
+    if (WIN_IS_POPUP(wp))
 	screen_line_flags |= SLF_POPUP;
 #endif
 
@@ -4180,58 +3982,9 @@ win_line(
 		/* Show the sign column when there are any signs in this
 		 * buffer or when using Netbeans. */
 		if (signcolumn_on(wp))
-		{
-		    int	text_sign;
-# ifdef FEAT_SIGN_ICONS
-		    int	icon_sign;
-# endif
-
-		    /* Draw two cells with the sign value or blank. */
-		    c_extra = ' ';
-		    c_final = NUL;
-		    char_attr = hl_combine_attr(wcr_attr, HL_ATTR(HLF_SC));
-		    n_extra = 2;
-
-		    if (row == startrow
-#ifdef FEAT_DIFF
-			    + filler_lines && filler_todo <= 0
-#endif
-			    )
-		    {
-			text_sign = buf_getsigntype(wp->w_buffer, lnum,
-								   SIGN_TEXT);
-# ifdef FEAT_SIGN_ICONS
-			icon_sign = buf_getsigntype(wp->w_buffer, lnum,
-								   SIGN_ICON);
-			if (gui.in_use && icon_sign != 0)
-			{
-			    /* Use the image in this position. */
-			    c_extra = SIGN_BYTE;
-			    c_final = NUL;
-#  ifdef FEAT_NETBEANS_INTG
-			    if (buf_signcount(wp->w_buffer, lnum) > 1)
-			    {
-				c_extra = MULTISIGN_BYTE;
-				c_final = NUL;
-			    }
-#  endif
-			    char_attr = icon_sign;
-			}
-			else
-# endif
-			    if (text_sign != 0)
-			{
-			    p_extra = sign_get_text(text_sign);
-			    if (p_extra != NULL)
-			    {
-				c_extra = NUL;
-				c_final = NUL;
-				n_extra = (int)STRLEN(p_extra);
-			    }
-			    char_attr = sign_get_attr(text_sign, FALSE);
-			}
-		    }
-		}
+		    get_sign_display_info(FALSE, wp, lnum, &sattr, wcr_attr,
+			    row, startrow, filler_lines, filler_todo, &c_extra,
+			    &c_final, extra, &p_extra, &n_extra, &char_attr);
 	    }
 #endif
 
@@ -4247,13 +4000,26 @@ win_line(
 #endif
 			    || vim_strchr(p_cpo, CPO_NUMCOL) == NULL))
 		{
-		    /* Draw the line number (empty space after wrapping). */
-		    if (row == startrow
+#ifdef FEAT_SIGNS
+		    // If 'signcolumn' is set to 'number' and a sign is present
+		    // in 'lnum', then display the sign instead of the line
+		    // number.
+		    if ((*wp->w_p_scl == 'n' && *(wp->w_p_scl + 1) == 'u')
+			    && sign_present)
+			get_sign_display_info(TRUE, wp, lnum, &sattr, wcr_attr,
+				row, startrow, filler_lines, filler_todo,
+				&c_extra, &c_final, extra, &p_extra, &n_extra,
+				&char_attr);
+		    else
+#endif
+		    {
+		      /* Draw the line number (empty space after wrapping). */
+		      if (row == startrow
 #ifdef FEAT_DIFF
 			    + filler_lines
 #endif
 			    )
-		    {
+		      {
 			long num;
 			char *fmt = "%*ld ";
 
@@ -4296,23 +4062,24 @@ win_line(
 			p_extra = extra;
 			c_extra = NUL;
 			c_final = NUL;
-		    }
-		    else
-		    {
+		      }
+		      else
+		      {
 			c_extra = ' ';
 			c_final = NUL;
-		    }
-		    n_extra = number_width(wp) + 1;
-		    char_attr = hl_combine_attr(wcr_attr, HL_ATTR(HLF_N));
+		      }
+		      n_extra = number_width(wp) + 1;
+		      char_attr = hl_combine_attr(wcr_attr, HL_ATTR(HLF_N));
 #ifdef FEAT_SYN_HL
-		    /* When 'cursorline' is set highlight the line number of
-		     * the current line differently.
-		     * TODO: Can we use CursorLine instead of CursorLineNr
-		     * when CursorLineNr isn't set? */
-		    if ((wp->w_p_cul || wp->w_p_rnu)
+		      /* When 'cursorline' is set highlight the line number of
+		       * the current line differently.
+		       * TODO: Can we use CursorLine instead of CursorLineNr
+		       * when CursorLineNr isn't set? */
+		      if ((wp->w_p_cul || wp->w_p_rnu)
 						 && lnum == wp->w_cursor.lnum)
 			char_attr = hl_combine_attr(wcr_attr, HL_ATTR(HLF_CLN));
 #endif
+		    }
 		}
 	    }
 
@@ -4487,7 +4254,7 @@ win_line(
 		 */
 		v = (long)(ptr - line);
 		cur = wp->w_match_head;
-		shl_flag = (screen_line_flags & SLF_POPUP);
+		shl_flag = FALSE;
 		while (cur != NULL || shl_flag == FALSE)
 		{
 		    if (shl_flag == FALSE
@@ -4497,6 +4264,8 @@ win_line(
 		    {
 			shl = &search_hl;
 			shl_flag = TRUE;
+			if (screen_line_flags & SLF_POPUP)
+			    continue;  // do not use search_hl
 		    }
 		    else
 			shl = &cur->hl;
@@ -4576,9 +4345,9 @@ win_line(
 
 		/* Use attributes from match with highest priority among
 		 * 'search_hl' and the match list. */
-		search_attr = search_hl.attr_cur;
 		cur = wp->w_match_head;
 		shl_flag = FALSE;
+		search_attr = 0;
 		while (cur != NULL || shl_flag == FALSE)
 		{
 		    if (shl_flag == FALSE
@@ -4588,6 +4357,8 @@ win_line(
 		    {
 			shl = &search_hl;
 			shl_flag = TRUE;
+			if (screen_line_flags & SLF_POPUP)
+			    continue;  // do not use search_hl
 		    }
 		    else
 			shl = &cur->hl;
@@ -4623,6 +4394,9 @@ win_line(
 	    {
 		int pi;
 		int bcol = (int)(ptr - line);
+
+		if (n_extra > 0)
+		    --bcol;  // still working on the previous char, e.g. Tab
 
 		// Check if any active property ends.
 		for (pi = 0; pi < text_props_active; ++pi)
@@ -4664,7 +4438,7 @@ win_line(
 			proptype_T  *pt = text_prop_type_by_id(
 					wp->w_buffer, text_props[tpi].tp_type);
 
-			if (pt != NULL)
+			if (pt != NULL && pt->pt_hl_id > 0)
 			{
 			    int pt_attr = syn_id2attr(pt->pt_hl_id);
 
@@ -5868,7 +5642,6 @@ win_line(
 		{
 		    /* Use attributes from match with highest priority among
 		     * 'search_hl' and the match list. */
-		    char_attr = search_hl.attr;
 		    cur = wp->w_match_head;
 		    shl_flag = FALSE;
 		    while (cur != NULL || shl_flag == FALSE)
@@ -5880,6 +5653,8 @@ win_line(
 			{
 			    shl = &search_hl;
 			    shl_flag = TRUE;
+			    if (screen_line_flags & SLF_POPUP)
+				continue;  // do not use search_hl
 			}
 			else
 			    shl = &cur->hl;
@@ -6492,6 +6267,23 @@ screen_get_current_line_off()
 }
 #endif
 
+#ifdef FEAT_TEXT_PROP
+/*
+ * Return TRUE if this position has a higher level popup or this cell is
+ * transparent in the current popup.
+ */
+    static int
+blocked_by_popup(int row, int col)
+{
+    int off;
+
+    if (!popup_visible)
+	return FALSE;
+    off = row * screen_Columns + col;
+    return popup_mask[off] > screen_zindex || popup_transparent[off];
+}
+#endif
+
 /*
  * Move one "cooked" screen line to the screen, but only the characters that
  * have actually changed.  Handle insert/delete character.
@@ -6598,11 +6390,9 @@ screen_line(
 	}
 #endif
 #ifdef FEAT_TEXT_PROP
-	// Skip if under a(nother) popup.
-	if (popup_mask[row * screen_Columns + col + coloff] > screen_zindex)
+	if (blocked_by_popup(row, col + coloff))
 	    redraw_this = FALSE;
 #endif
-
 	if (redraw_this)
 	{
 	    /*
@@ -6854,8 +6644,7 @@ screen_line(
 	if (coloff + col < Columns)
 	{
 #ifdef FEAT_TEXT_PROP
-	    if (popup_mask[row * screen_Columns + col + coloff]
-							     <= screen_zindex)
+	    if (!blocked_by_popup(row, col + coloff))
 #endif
 	    {
 		int c;
@@ -7948,7 +7737,7 @@ screen_puts_len(
 
 	if ((need_redraw || force_redraw_this)
 #ifdef FEAT_TEXT_PROP
-		&& popup_mask[row * screen_Columns + col] <= screen_zindex
+		&& !blocked_by_popup(row, col)
 #endif
 	   )
 	{
@@ -8717,8 +8506,7 @@ screen_char(unsigned off, int row, int col)
 	return;
 #endif
 #ifdef FEAT_TEXT_PROP
-    // Skip if under a(nother) popup.
-    if (popup_mask[row * screen_Columns + col] > screen_zindex)
+    if (blocked_by_popup(row, col))
 	return;
 #endif
 
@@ -8906,23 +8694,23 @@ space_to_screenline(int off, int attr)
  */
     void
 screen_fill(
-    int	    start_row,
-    int	    end_row,
-    int	    start_col,
-    int	    end_col,
-    int	    c1,
-    int	    c2,
-    int	    attr)
+	int	start_row,
+	int	end_row,
+	int	start_col,
+	int	end_col,
+	int	c1,
+	int	c2,
+	int	attr)
 {
-    int		    row;
-    int		    col;
-    int		    off;
-    int		    end_off;
-    int		    did_delete;
-    int		    c;
-    int		    norm_term;
+    int	    row;
+    int	    col;
+    int	    off;
+    int	    end_off;
+    int	    did_delete;
+    int	    c;
+    int	    norm_term;
 #if defined(FEAT_GUI) || defined(UNIX)
-    int		    force_next = FALSE;
+    int	    force_next = FALSE;
 #endif
 
     if (end_row > screen_Rows)		/* safety check */
@@ -9021,7 +8809,7 @@ screen_fill(
 		    )
 #ifdef FEAT_TEXT_PROP
 		    // Skip if under a(nother) popup.
-		    && popup_mask[row * screen_Columns + col] <= screen_zindex
+		    && !blocked_by_popup(row, col)
 #endif
 	       )
 	    {
@@ -9163,6 +8951,7 @@ screenalloc(int doclear)
 #ifdef FEAT_TEXT_PROP
     short	    *new_popup_mask;
     short	    *new_popup_mask_next;
+    char	    *new_popup_transparent;
 #endif
     tabpage_T	    *tp;
     static int	    entered = FALSE;		/* avoid recursiveness */
@@ -9248,6 +9037,7 @@ retry:
 #ifdef FEAT_TEXT_PROP
     new_popup_mask = LALLOC_MULT(short, Rows * Columns);
     new_popup_mask_next = LALLOC_MULT(short, Rows * Columns);
+    new_popup_transparent = LALLOC_MULT(char, Rows * Columns);
 #endif
 
     FOR_ALL_TAB_WINDOWS(tp, wp)
@@ -9294,6 +9084,7 @@ give_up:
 #ifdef FEAT_TEXT_PROP
 	    || new_popup_mask == NULL
 	    || new_popup_mask_next == NULL
+	    || new_popup_transparent == NULL
 #endif
 	    || outofmem)
     {
@@ -9318,6 +9109,7 @@ give_up:
 #ifdef FEAT_TEXT_PROP
 	VIM_CLEAR(new_popup_mask);
 	VIM_CLEAR(new_popup_mask_next);
+	VIM_CLEAR(new_popup_transparent);
 #endif
     }
     else
@@ -9407,8 +9199,10 @@ give_up:
     TabPageIdxs = new_TabPageIdxs;
 #ifdef FEAT_TEXT_PROP
     popup_mask = new_popup_mask;
-    popup_mask_next = new_popup_mask_next;
     vim_memset(popup_mask, 0, Rows * Columns * sizeof(short));
+    popup_mask_next = new_popup_mask_next;
+    popup_transparent = new_popup_transparent;
+    vim_memset(popup_transparent, 0, Rows * Columns * sizeof(char));
     popup_mask_refresh = TRUE;
 #endif
 
@@ -9477,6 +9271,7 @@ free_screenlines(void)
 #ifdef FEAT_TEXT_PROP
     VIM_CLEAR(popup_mask);
     VIM_CLEAR(popup_mask_next);
+    VIM_CLEAR(popup_transparent);
 #endif
 }
 
@@ -11544,6 +11339,14 @@ number_width(win_T *wp)
     /* 'numberwidth' gives the minimal width plus one */
     if (n < wp->w_p_nuw - 1)
 	n = wp->w_p_nuw - 1;
+
+# ifdef FEAT_SIGNS
+    // If 'signcolumn' is set to 'number' and there is a sign to display, then
+    // the minimal width for the number column is 2.
+    if (n < 2 && (wp->w_buffer->b_signlist != NULL)
+	    && (*wp->w_p_scl == 'n' && *(wp->w_p_scl + 1) == 'u'))
+	n = 2;
+# endif
 
     wp->w_nrwidth_width = n;
     wp->w_nuw_cached = wp->w_p_nuw;
