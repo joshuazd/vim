@@ -2851,9 +2851,13 @@ channel_has_readahead(channel_T *channel, ch_part_T part)
     if (ch_mode == MODE_JSON || ch_mode == MODE_JS)
     {
 	jsonq_T   *head = &channel->ch_part[part].ch_json_head;
-	jsonq_T   *item = head->jq_next;
 
-	return item != NULL;
+	if (head->jq_next == NULL)
+	    // Parse json from readahead, there might be a complete message to
+	    // process.
+	    channel_parse_json(channel, part);
+
+	return head->jq_next != NULL;
     }
     return channel_peek(channel, part) != NULL;
 }
@@ -3986,7 +3990,7 @@ channel_send(
 		    writeq_T *last = wq->wq_prev;
 
 		    /* append to the last entry */
-		    if (ga_grow(&last->wq_ga, len) == OK)
+		    if (len > 0 && ga_grow(&last->wq_ga, len) == OK)
 		    {
 			mch_memmove((char *)last->wq_ga.ga_data
 							  + last->wq_ga.ga_len,
@@ -4008,7 +4012,7 @@ channel_send(
 			    wq->wq_prev->wq_next = last;
 			wq->wq_prev = last;
 			ga_init2(&last->wq_ga, 1, 1000);
-			if (ga_grow(&last->wq_ga, len) == OK)
+			if (len > 0 && ga_grow(&last->wq_ga, len) == OK)
 			{
 			    mch_memmove(last->wq_ga.ga_data, buf, len);
 			    last->wq_ga.ga_len = len;

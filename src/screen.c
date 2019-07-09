@@ -607,6 +607,7 @@ update_screen(int type_arg)
 	    curwin->w_lines_valid = 0;	/* don't use w_lines[].wl_size now */
 	return FAIL;
     }
+    updating_screen = TRUE;
 
 #ifdef FEAT_TEXT_PROP
     // Update popup_mask if needed.  This may set w_redraw_top and w_redraw_bot
@@ -614,7 +615,6 @@ update_screen(int type_arg)
     may_update_popup_mask(type);
 #endif
 
-    updating_screen = TRUE;
 #ifdef FEAT_SYN_HL
     ++display_tick;	    /* let syntax code know we're in a next round of
 			     * display updating */
@@ -875,7 +875,7 @@ update_prepare(void)
 #endif
 #ifdef FEAT_TEXT_PROP
     // Update popup_mask if needed.
-    may_update_popup_mask(0);
+    may_update_popup_mask(must_redraw);
 #endif
 }
 
@@ -1005,7 +1005,7 @@ get_wcr_attr(win_T *wp)
     if (*wp->w_p_wcr != NUL)
 	wcr_attr = syn_name2attr(wp->w_p_wcr);
 #ifdef FEAT_TEXT_PROP
-    if (bt_popup(wp->w_buffer) && wcr_attr == 0)
+    if (WIN_IS_POPUP(wp) && wcr_attr == 0)
 	wcr_attr = HL_ATTR(HLF_PNI);
 #endif
     return wcr_attr;
@@ -1555,7 +1555,7 @@ win_update(win_T *wp)
 	if (mid_start == 0)
 	{
 	    mid_end = wp->w_height;
-	    if (ONE_WINDOW)
+	    if (ONE_WINDOW && !WIN_IS_POPUP(wp))
 	    {
 		/* Clear the screen when it was not done by win_del_lines() or
 		 * win_ins_lines() above, "screen_cleared" is FALSE or MAYBE
@@ -2081,9 +2081,7 @@ win_update(win_T *wp)
 		    && wp->w_lines[idx].wl_lnum == lnum
 		    && lnum > wp->w_topline
 		    && !(dy_flags & (DY_LASTLINE | DY_TRUNCATE))
-#ifdef FEAT_TEXT_PROP
-		    && !bt_popup(wp->w_buffer)
-#endif
+		    && !WIN_IS_POPUP(wp)
 		    && srow + wp->w_lines[idx].wl_size > wp->w_height
 #ifdef FEAT_DIFF
 		    && diff_check_fill(wp, lnum) == 0
@@ -2240,7 +2238,7 @@ win_update(win_T *wp)
 	}
 #endif
 #ifdef FEAT_TEXT_PROP
-	else if (bt_popup(wp->w_buffer))
+	else if (WIN_IS_POPUP(wp))
 	{
 	    // popup line that doesn't fit is left as-is
 	    wp->w_botline = lnum;
@@ -2306,11 +2304,8 @@ win_update(win_T *wp)
 
 	// Make sure the rest of the screen is blank
 	// put '~'s on rows that aren't part of the file.
-	win_draw_end(wp,
-#ifdef FEAT_TEXT_PROP
-		bt_popup(wp->w_buffer) ? ' ' :
-#endif
-				  '~', ' ', FALSE, row, wp->w_height, HLF_EOB);
+	win_draw_end(wp, WIN_IS_POPUP(wp) ? ' ' : '~',
+				       ' ', FALSE, row, wp->w_height, HLF_EOB);
     }
 
 #ifdef SYN_TIME_LIMIT
@@ -3047,7 +3042,8 @@ text_prop_compare(const void *s1, const void *s2)
 get_sign_display_info(
 	int		nrcol,
 	win_T		*wp,
-	linenr_T	lnum,
+	linenr_T	lnum UNUSED,
+	sign_attrs_T	*sattr,
 	int		wcr_attr,
 	int		row,
 	int		startrow,
@@ -3082,9 +3078,9 @@ get_sign_display_info(
 #endif
        )
     {
-	text_sign = buf_getsigntype(wp->w_buffer, lnum, SIGN_TEXT);
+	text_sign = (sattr->text != NULL) ? sattr->typenr : 0;
 # ifdef FEAT_SIGN_ICONS
-	icon_sign = buf_getsigntype(wp->w_buffer, lnum, SIGN_ICON);
+	icon_sign = (sattr->icon != NULL) ? sattr->typenr : 0;
 	if (gui.in_use && icon_sign != 0)
 	{
 	    // Use the image in this position.
@@ -3098,7 +3094,7 @@ get_sign_display_info(
 	    else
 		*c_extrap = SIGN_BYTE;
 #  ifdef FEAT_NETBEANS_INTG
-	    if (buf_signcount(wp->w_buffer, lnum) > 1)
+	    if (netbeans_active() && (buf_signcount(wp->w_buffer, lnum) > 1))
 	    {
 		if (nrcol)
 		{
@@ -3119,7 +3115,7 @@ get_sign_display_info(
 # endif
 	    if (text_sign != 0)
 	    {
-		*pp_extra = sign_get_text(text_sign);
+		*pp_extra = sattr->text;
 		if (*pp_extra != NULL)
 		{
 		    if (nrcol)
@@ -3132,7 +3128,7 @@ get_sign_display_info(
 		    *c_finalp = NUL;
 		    *n_extrap = (int)STRLEN(*pp_extra);
 		}
-		*char_attrp = sign_get_attr(text_sign, FALSE);
+		*char_attrp = sattr->texthl;
 	    }
     }
 }
@@ -3154,32 +3150,32 @@ win_line(
     int		nochange UNUSED,	// not updating for changed text
     int		number_only)		// only update the number column
 {
-    int		col = 0;		/* visual column on screen */
-    unsigned	off;			/* offset in ScreenLines/ScreenAttrs */
-    int		c = 0;			/* init for GCC */
-    long	vcol = 0;		/* virtual column (for tabs) */
+    int		col = 0;		// visual column on screen
+    unsigned	off;			// offset in ScreenLines/ScreenAttrs
+    int		c = 0;			// init for GCC
+    long	vcol = 0;		// virtual column (for tabs)
 #ifdef FEAT_LINEBREAK
-    long	vcol_sbr = -1;		/* virtual column after showbreak */
+    long	vcol_sbr = -1;		// virtual column after showbreak
 #endif
-    long	vcol_prev = -1;		/* "vcol" of previous character */
-    char_u	*line;			/* current line */
-    char_u	*ptr;			/* current position in "line" */
-    int		row;			/* row in the window, excl w_winrow */
-    int		screen_row;		/* row on the screen, incl w_winrow */
+    long	vcol_prev = -1;		// "vcol" of previous character
+    char_u	*line;			// current line
+    char_u	*ptr;			// current position in "line"
+    int		row;			// row in the window, excl w_winrow
+    int		screen_row;		// row on the screen, incl w_winrow
 
-    char_u	extra[18];		/* "%ld" and 'fdc' must fit in here */
-    int		n_extra = 0;		/* number of extra chars */
-    char_u	*p_extra = NULL;	/* string of extra chars, plus NUL */
-    char_u	*p_extra_free = NULL;   /* p_extra needs to be freed */
-    int		c_extra = NUL;		/* extra chars, all the same */
-    int		c_final = NUL;		/* final char, mandatory if set */
-    int		extra_attr = 0;		/* attributes when n_extra != 0 */
-    static char_u *at_end_str = (char_u *)""; /* used for p_extra when
-					   displaying lcs_eol at end-of-line */
-    int		lcs_eol_one = lcs_eol;	/* lcs_eol until it's been used */
-    int		lcs_prec_todo = lcs_prec;   /* lcs_prec until it's been used */
+    char_u	extra[21];		// "%ld " and 'fdc' must fit in here
+    int		n_extra = 0;		// number of extra chars
+    char_u	*p_extra = NULL;	// string of extra chars, plus NUL
+    char_u	*p_extra_free = NULL;   // p_extra needs to be freed
+    int		c_extra = NUL;		// extra chars, all the same
+    int		c_final = NUL;		// final char, mandatory if set
+    int		extra_attr = 0;		// attributes when n_extra != 0
+    static char_u *at_end_str = (char_u *)""; // used for p_extra when
+					   // displaying lcs_eol at end-of-line
+    int		lcs_eol_one = lcs_eol;	// lcs_eol until it's been used
+    int		lcs_prec_todo = lcs_prec;   // lcs_prec until it's been used
 
-    /* saved "extra" items for when draw_state becomes WL_LINE (again) */
+    // saved "extra" items for when draw_state becomes WL_LINE (again)
     int		saved_n_extra = 0;
     char_u	*saved_p_extra = NULL;
     int		saved_c_extra = 0;
@@ -3193,9 +3189,10 @@ win_line(
 
     int		n_skip = 0;		/* nr of chars to skip for 'nowrap' */
 
-    int		fromcol, tocol;		/* start/end of inverting */
-    int		fromcol_prev = -2;	/* start of inverting after cursor */
-    int		noinvcur = FALSE;	/* don't invert the cursor */
+    int		fromcol = -10;		// start of inverting
+    int		tocol = MAXCOL;		// end of inverting
+    int		fromcol_prev = -2;	// start of inverting after cursor
+    int		noinvcur = FALSE;	// don't invert the cursor
     pos_T	*top, *bot;
     int		lnum_in_visual_area = FALSE;
     pos_T	pos;
@@ -3271,6 +3268,10 @@ win_line(
 	|| defined(FEAT_SYN_HL) || defined(FEAT_DIFF)
 # define LINE_ATTR
     int		line_attr = 0;		/* attribute for the whole line */
+#endif
+#ifdef FEAT_SIGNS
+    int		sign_present = FALSE;
+    sign_attrs_T sattr;
 #endif
 #ifdef FEAT_SEARCH_EXTRA
     matchitem_T *cur;			/* points to the match list */
@@ -3451,39 +3452,40 @@ win_line(
 #endif
 
 	/*
-	 * handle visual active in this window
+	 * handle Visual active in this window
 	 */
-	fromcol = -10;
-	tocol = MAXCOL;
 	if (VIsual_active && wp->w_buffer == curwin->w_buffer)
 	{
-					    /* Visual is after curwin->w_cursor */
 	    if (LTOREQ_POS(curwin->w_cursor, VIsual))
 	    {
+		// Visual is after curwin->w_cursor
 		top = &curwin->w_cursor;
 		bot = &VIsual;
 	    }
-	    else				/* Visual is before curwin->w_cursor */
+	    else
 	    {
+		// Visual is before curwin->w_cursor
 		top = &VIsual;
 		bot = &curwin->w_cursor;
 	    }
 	    lnum_in_visual_area = (lnum >= top->lnum && lnum <= bot->lnum);
-	    if (VIsual_mode == Ctrl_V)	/* block mode */
+	    if (VIsual_mode == Ctrl_V)
 	    {
+		// block mode
 		if (lnum_in_visual_area)
 		{
 		    fromcol = wp->w_old_cursor_fcol;
 		    tocol = wp->w_old_cursor_lcol;
 		}
 	    }
-	    else				/* non-block mode */
+	    else
 	    {
+		// non-block mode
 		if (lnum > top->lnum && lnum <= bot->lnum)
 		    fromcol = 0;
 		else if (lnum == top->lnum)
 		{
-		    if (VIsual_mode == 'V')	/* linewise */
+		    if (VIsual_mode == 'V')	// linewise
 			fromcol = 0;
 		    else
 		    {
@@ -3590,12 +3592,15 @@ win_line(
     filler_todo = filler_lines;
 #endif
 
+#ifdef FEAT_SIGNS
+    sign_present = buf_get_signattrs(wp->w_buffer, lnum, &sattr);
+#endif
+
 #ifdef LINE_ATTR
 # ifdef FEAT_SIGNS
     /* If this line has a sign with line highlighting set line_attr. */
-    v = buf_getsigntype(wp->w_buffer, lnum, SIGN_LINEHL);
-    if (v != 0)
-	line_attr = sign_get_attr((int)v, TRUE);
+    if (sign_present)
+	line_attr = sattr.linehl;
 # endif
 # if defined(FEAT_QUICKFIX)
     /* Highlight the current line in the quickfix window. */
@@ -3669,7 +3674,7 @@ win_line(
 	area_highlighting = TRUE;
     }
 #ifdef FEAT_TEXT_PROP
-    if (bt_popup(wp->w_buffer))
+    if (WIN_IS_POPUP(wp))
 	screen_line_flags |= SLF_POPUP;
 #endif
 
@@ -3979,8 +3984,8 @@ win_line(
 		/* Show the sign column when there are any signs in this
 		 * buffer or when using Netbeans. */
 		if (signcolumn_on(wp))
-		    get_sign_display_info(FALSE, wp, lnum, wcr_attr, row,
-			    startrow, filler_lines, filler_todo, &c_extra,
+		    get_sign_display_info(FALSE, wp, lnum, &sattr, wcr_attr,
+			    row, startrow, filler_lines, filler_todo, &c_extra,
 			    &c_final, extra, &p_extra, &n_extra, &char_attr);
 	    }
 #endif
@@ -4002,11 +4007,10 @@ win_line(
 		    // in 'lnum', then display the sign instead of the line
 		    // number.
 		    if ((*wp->w_p_scl == 'n' && *(wp->w_p_scl + 1) == 'u')
-			    && buf_findsign_id(wp->w_buffer, lnum,
-							(char_u *)"*") != 0)
-			get_sign_display_info(TRUE, wp, lnum, wcr_attr, row,
-				startrow, filler_lines, filler_todo, &c_extra,
-				&c_final, extra, &p_extra, &n_extra,
+			    && sign_present)
+			get_sign_display_info(TRUE, wp, lnum, &sattr, wcr_attr,
+				row, startrow, filler_lines, filler_todo,
+				&c_extra, &c_final, extra, &p_extra, &n_extra,
 				&char_attr);
 		    else
 #endif
@@ -4436,7 +4440,7 @@ win_line(
 			proptype_T  *pt = text_prop_type_by_id(
 					wp->w_buffer, text_props[tpi].tp_type);
 
-			if (pt != NULL)
+			if (pt != NULL && pt->pt_hl_id > 0)
 			{
 			    int pt_attr = syn_id2attr(pt->pt_hl_id);
 
@@ -11337,6 +11341,14 @@ number_width(win_T *wp)
     /* 'numberwidth' gives the minimal width plus one */
     if (n < wp->w_p_nuw - 1)
 	n = wp->w_p_nuw - 1;
+
+# ifdef FEAT_SIGNS
+    // If 'signcolumn' is set to 'number' and there is a sign to display, then
+    // the minimal width for the number column is 2.
+    if (n < 2 && (wp->w_buffer->b_signlist != NULL)
+	    && (*wp->w_p_scl == 'n' && *(wp->w_p_scl + 1) == 'u'))
+	n = 2;
+# endif
 
     wp->w_nrwidth_width = n;
     wp->w_nuw_cached = wp->w_p_nuw;

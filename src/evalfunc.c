@@ -16,10 +16,6 @@
 
 #if defined(FEAT_EVAL) || defined(PROTO)
 
-#ifdef AMIGA
-# include <time.h>	/* for strftime() */
-#endif
-
 #ifdef VMS
 # include <float.h>
 #endif
@@ -71,8 +67,10 @@ static void f_balloon_split(typval_T *argvars, typval_T *rettv);
 #endif
 static void f_browse(typval_T *argvars, typval_T *rettv);
 static void f_browsedir(typval_T *argvars, typval_T *rettv);
+static void f_bufadd(typval_T *argvars, typval_T *rettv);
 static void f_bufexists(typval_T *argvars, typval_T *rettv);
 static void f_buflisted(typval_T *argvars, typval_T *rettv);
+static void f_bufload(typval_T *argvars, typval_T *rettv);
 static void f_bufloaded(typval_T *argvars, typval_T *rettv);
 static void f_bufname(typval_T *argvars, typval_T *rettv);
 static void f_bufnr(typval_T *argvars, typval_T *rettv);
@@ -352,15 +350,6 @@ static void f_sha256(typval_T *argvars, typval_T *rettv);
 #endif /* FEAT_CRYPT */
 static void f_shellescape(typval_T *argvars, typval_T *rettv);
 static void f_shiftwidth(typval_T *argvars, typval_T *rettv);
-#ifdef FEAT_SIGNS
-static void f_sign_define(typval_T *argvars, typval_T *rettv);
-static void f_sign_getdefined(typval_T *argvars, typval_T *rettv);
-static void f_sign_getplaced(typval_T *argvars, typval_T *rettv);
-static void f_sign_jump(typval_T *argvars, typval_T *rettv);
-static void f_sign_place(typval_T *argvars, typval_T *rettv);
-static void f_sign_undefine(typval_T *argvars, typval_T *rettv);
-static void f_sign_unplace(typval_T *argvars, typval_T *rettv);
-#endif
 static void f_simplify(typval_T *argvars, typval_T *rettv);
 #ifdef FEAT_FLOAT
 static void f_sin(typval_T *argvars, typval_T *rettv);
@@ -535,11 +524,13 @@ static struct fst
 #endif
     {"browse",		4, 4, f_browse},
     {"browsedir",	2, 2, f_browsedir},
+    {"bufadd",		1, 1, f_bufadd},
     {"bufexists",	1, 1, f_bufexists},
     {"buffer_exists",	1, 1, f_bufexists},	/* obsolete */
     {"buffer_name",	1, 1, f_bufname},	/* obsolete */
     {"buffer_number",	1, 1, f_bufnr},		/* obsolete */
     {"buflisted",	1, 1, f_buflisted},
+    {"bufload",		1, 1, f_bufload},
     {"bufloaded",	1, 1, f_bufloaded},
     {"bufname",		1, 1, f_bufname},
     {"bufnr",		1, 2, f_bufnr},
@@ -780,6 +771,7 @@ static struct fst
 #endif
 #ifdef FEAT_TEXT_PROP
     {"popup_atcursor",	2, 2, f_popup_atcursor},
+    {"popup_beval",	2, 2, f_popup_beval},
     {"popup_clear",	0, 0, f_popup_clear},
     {"popup_close",	1, 2, f_popup_close},
     {"popup_create",	2, 2, f_popup_create},
@@ -858,6 +850,7 @@ static struct fst
     {"screenchar",	2, 2, f_screenchar},
     {"screenchars",	2, 2, f_screenchars},
     {"screencol",	0, 0, f_screencol},
+    {"screenpos",	3, 3, f_screenpos},
     {"screenrow",	0, 0, f_screenrow},
     {"screenstring",	2, 2, f_screenstring},
     {"search",		1, 4, f_search},
@@ -1181,7 +1174,7 @@ non_zero_arg(typval_T *argvars)
  * Also accepts ".", "$", etc., but that only works for the current buffer.
  * Returns -1 on error.
  */
-    static linenr_T
+    linenr_T
 tv_get_lnum(typval_T *argvars)
 {
     typval_T	rettv;
@@ -1929,6 +1922,17 @@ find_buffer(typval_T *avar)
 }
 
 /*
+ * "bufadd(expr)" function
+ */
+    static void
+f_bufadd(typval_T *argvars, typval_T *rettv)
+{
+    char_u *name = tv_get_string(&argvars[0]);
+
+    rettv->vval.v_number = buflist_add(*name == NUL ? NULL : name, 0);
+}
+
+/*
  * "bufexists(expr)" function
  */
     static void
@@ -1947,6 +1951,18 @@ f_buflisted(typval_T *argvars, typval_T *rettv)
 
     buf = find_buffer(&argvars[0]);
     rettv->vval.v_number = (buf != NULL && buf->b_p_bl);
+}
+
+/*
+ * "bufload(expr)" function
+ */
+    static void
+f_bufload(typval_T *argvars, typval_T *rettv UNUSED)
+{
+    buf_T	*buf = get_buf_arg(&argvars[0]);
+
+    if (buf != NULL)
+	buffer_ensure_loaded(buf);
 }
 
 /*
@@ -4495,10 +4511,10 @@ get_buffer_info(buf_T *buf)
     dict_add_number(dict, "hidden",
 			    buf->b_ml.ml_mfp != NULL && buf->b_nwindows == 0);
 
-    /* Get a reference to buffer variables */
+    // Get a reference to buffer variables
     dict_add_dict(dict, "variables", buf->b_vars);
 
-    /* List of windows displaying this buffer */
+    // List of windows displaying this buffer
     windows = list_alloc();
     if (windows != NULL)
     {
@@ -4507,6 +4523,23 @@ get_buffer_info(buf_T *buf)
 		list_append_number(windows, (varnumber_T)wp->w_id);
 	dict_add_list(dict, "windows", windows);
     }
+
+#ifdef FEAT_TEXT_PROP
+    // List of popup windows displaying this buffer
+    windows = list_alloc();
+    if (windows != NULL)
+    {
+	for (wp = first_popupwin; wp != NULL; wp = wp->w_next)
+	    if (wp->w_buffer == buf)
+		list_append_number(windows, (varnumber_T)wp->w_id);
+	FOR_ALL_TABPAGES(tp)
+	    for (wp = tp->tp_first_popupwin; wp != NULL; wp = wp->w_next)
+		if (wp->w_buffer == buf)
+		    list_append_number(windows, (varnumber_T)wp->w_id);
+
+	dict_add_list(dict, "popups", windows);
+    }
+#endif
 
 #ifdef FEAT_SIGNS
     if (buf->b_signlist != NULL)
@@ -4880,7 +4913,7 @@ f_getchar(typval_T *argvars, typval_T *rettv)
 		    return;
 		(void)mouse_comp_pos(win, &row, &col, &lnum);
 # ifdef FEAT_TEXT_PROP
-		if (bt_popup(win->w_buffer))
+		if (WIN_IS_POPUP(win))
 		    winnr = 0;
 		else
 # endif
@@ -5671,7 +5704,7 @@ get_tabpage_info(tabpage_T *tp, int tp_idx)
     if (l != NULL)
     {
 	for (wp = (tp == curtab) ? firstwin : tp->tp_firstwin;
-		wp; wp = wp->w_next)
+						   wp != NULL; wp = wp->w_next)
 	    list_append_number(l, (varnumber_T)wp->w_id);
 	dict_add_list(dict, "windows", l);
     }
@@ -11608,359 +11641,6 @@ f_shiftwidth(typval_T *argvars UNUSED, typval_T *rettv)
 
     rettv->vval.v_number = get_sw_value(curbuf);
 }
-
-#ifdef FEAT_SIGNS
-/*
- * "sign_define()" function
- */
-    static void
-f_sign_define(typval_T *argvars, typval_T *rettv)
-{
-    char_u	*name;
-    dict_T	*dict;
-    char_u	*icon = NULL;
-    char_u	*linehl = NULL;
-    char_u	*text = NULL;
-    char_u	*texthl = NULL;
-
-    rettv->vval.v_number = -1;
-
-    name = tv_get_string_chk(&argvars[0]);
-    if (name == NULL)
-	return;
-
-    if (argvars[1].v_type != VAR_UNKNOWN)
-    {
-	if (argvars[1].v_type != VAR_DICT)
-	{
-	    emsg(_(e_dictreq));
-	    return;
-	}
-
-	// sign attributes
-	dict = argvars[1].vval.v_dict;
-	if (dict_find(dict, (char_u *)"icon", -1) != NULL)
-	    icon = dict_get_string(dict, (char_u *)"icon", TRUE);
-	if (dict_find(dict, (char_u *)"linehl", -1) != NULL)
-	    linehl = dict_get_string(dict, (char_u *)"linehl", TRUE);
-	if (dict_find(dict, (char_u *)"text", -1) != NULL)
-	    text = dict_get_string(dict, (char_u *)"text", TRUE);
-	if (dict_find(dict, (char_u *)"texthl", -1) != NULL)
-	    texthl = dict_get_string(dict, (char_u *)"texthl", TRUE);
-    }
-
-    if (sign_define_by_name(name, icon, linehl, text, texthl) == OK)
-	rettv->vval.v_number = 0;
-
-    vim_free(icon);
-    vim_free(linehl);
-    vim_free(text);
-    vim_free(texthl);
-}
-
-/*
- * "sign_getdefined()" function
- */
-    static void
-f_sign_getdefined(typval_T *argvars, typval_T *rettv)
-{
-    char_u	*name = NULL;
-
-    if (rettv_list_alloc_id(rettv, aid_sign_getdefined) != OK)
-	return;
-
-    if (argvars[0].v_type != VAR_UNKNOWN)
-	name = tv_get_string(&argvars[0]);
-
-    sign_getlist(name, rettv->vval.v_list);
-}
-
-/*
- * "sign_getplaced()" function
- */
-    static void
-f_sign_getplaced(typval_T *argvars, typval_T *rettv)
-{
-    buf_T	*buf = NULL;
-    dict_T	*dict;
-    dictitem_T	*di;
-    linenr_T	lnum = 0;
-    int		sign_id = 0;
-    char_u	*group = NULL;
-    int		notanum = FALSE;
-
-    if (rettv_list_alloc_id(rettv, aid_sign_getplaced) != OK)
-	return;
-
-    if (argvars[0].v_type != VAR_UNKNOWN)
-    {
-	// get signs placed in the specified buffer
-	buf = get_buf_arg(&argvars[0]);
-	if (buf == NULL)
-	    return;
-
-	if (argvars[1].v_type != VAR_UNKNOWN)
-	{
-	    if (argvars[1].v_type != VAR_DICT ||
-				((dict = argvars[1].vval.v_dict) == NULL))
-	    {
-		emsg(_(e_dictreq));
-		return;
-	    }
-	    if ((di = dict_find(dict, (char_u *)"lnum", -1)) != NULL)
-	    {
-		// get signs placed at this line
-		(void)tv_get_number_chk(&di->di_tv, &notanum);
-		if (notanum)
-		    return;
-		lnum = tv_get_lnum(&di->di_tv);
-	    }
-	    if ((di = dict_find(dict, (char_u *)"id", -1)) != NULL)
-	    {
-		// get sign placed with this identifier
-		sign_id = (int)tv_get_number_chk(&di->di_tv, &notanum);
-		if (notanum)
-		    return;
-	    }
-	    if ((di = dict_find(dict, (char_u *)"group", -1)) != NULL)
-	    {
-		group = tv_get_string_chk(&di->di_tv);
-		if (group == NULL)
-		    return;
-		if (*group == '\0')	// empty string means global group
-		    group = NULL;
-	    }
-	}
-    }
-
-    sign_get_placed(buf, lnum, sign_id, group, rettv->vval.v_list);
-}
-
-/*
- * "sign_jump()" function
- */
-    static void
-f_sign_jump(typval_T *argvars, typval_T *rettv)
-{
-    int		sign_id;
-    char_u	*sign_group = NULL;
-    buf_T	*buf;
-    int		notanum = FALSE;
-
-    rettv->vval.v_number = -1;
-
-    // Sign identifier
-    sign_id = (int)tv_get_number_chk(&argvars[0], &notanum);
-    if (notanum)
-	return;
-    if (sign_id <= 0)
-    {
-	emsg(_(e_invarg));
-	return;
-    }
-
-    // Sign group
-    sign_group = tv_get_string_chk(&argvars[1]);
-    if (sign_group == NULL)
-	return;
-    if (sign_group[0] == '\0')
-	sign_group = NULL;			// global sign group
-    else
-    {
-	sign_group = vim_strsave(sign_group);
-	if (sign_group == NULL)
-	    return;
-    }
-
-    // Buffer to place the sign
-    buf = get_buf_arg(&argvars[2]);
-    if (buf == NULL)
-	goto cleanup;
-
-    rettv->vval.v_number = sign_jump(sign_id, sign_group, buf);
-
-cleanup:
-    vim_free(sign_group);
-}
-
-/*
- * "sign_place()" function
- */
-    static void
-f_sign_place(typval_T *argvars, typval_T *rettv)
-{
-    int		sign_id;
-    char_u	*group = NULL;
-    char_u	*sign_name;
-    buf_T	*buf;
-    dict_T	*dict;
-    dictitem_T	*di;
-    linenr_T	lnum = 0;
-    int		prio = SIGN_DEF_PRIO;
-    int		notanum = FALSE;
-
-    rettv->vval.v_number = -1;
-
-    // Sign identifier
-    sign_id = (int)tv_get_number_chk(&argvars[0], &notanum);
-    if (notanum)
-	return;
-    if (sign_id < 0)
-    {
-	emsg(_(e_invarg));
-	return;
-    }
-
-    // Sign group
-    group = tv_get_string_chk(&argvars[1]);
-    if (group == NULL)
-	return;
-    if (group[0] == '\0')
-	group = NULL;			// global sign group
-    else
-    {
-	group = vim_strsave(group);
-	if (group == NULL)
-	    return;
-    }
-
-    // Sign name
-    sign_name = tv_get_string_chk(&argvars[2]);
-    if (sign_name == NULL)
-	goto cleanup;
-
-    // Buffer to place the sign
-    buf = get_buf_arg(&argvars[3]);
-    if (buf == NULL)
-	goto cleanup;
-
-    if (argvars[4].v_type != VAR_UNKNOWN)
-    {
-	if (argvars[4].v_type != VAR_DICT ||
-				((dict = argvars[4].vval.v_dict) == NULL))
-	{
-	    emsg(_(e_dictreq));
-	    goto cleanup;
-	}
-
-	// Line number where the sign is to be placed
-	if ((di = dict_find(dict, (char_u *)"lnum", -1)) != NULL)
-	{
-	    (void)tv_get_number_chk(&di->di_tv, &notanum);
-	    if (notanum)
-		goto cleanup;
-	    lnum = tv_get_lnum(&di->di_tv);
-	}
-	if ((di = dict_find(dict, (char_u *)"priority", -1)) != NULL)
-	{
-	    // Sign priority
-	    prio = (int)tv_get_number_chk(&di->di_tv, &notanum);
-	    if (notanum)
-		goto cleanup;
-	}
-    }
-
-    if (sign_place(&sign_id, group, sign_name, buf, lnum, prio) == OK)
-	rettv->vval.v_number = sign_id;
-
-cleanup:
-    vim_free(group);
-}
-
-/*
- * "sign_undefine()" function
- */
-    static void
-f_sign_undefine(typval_T *argvars, typval_T *rettv)
-{
-    char_u *name;
-
-    rettv->vval.v_number = -1;
-
-    if (argvars[0].v_type == VAR_UNKNOWN)
-    {
-	// Free all the signs
-	free_signs();
-	rettv->vval.v_number = 0;
-    }
-    else
-    {
-	// Free only the specified sign
-	name = tv_get_string_chk(&argvars[0]);
-	if (name == NULL)
-	    return;
-
-	if (sign_undefine_by_name(name) == OK)
-	    rettv->vval.v_number = 0;
-    }
-}
-
-/*
- * "sign_unplace()" function
- */
-    static void
-f_sign_unplace(typval_T *argvars, typval_T *rettv)
-{
-    dict_T	*dict;
-    dictitem_T	*di;
-    int		sign_id = 0;
-    buf_T	*buf = NULL;
-    char_u	*group = NULL;
-
-    rettv->vval.v_number = -1;
-
-    if (argvars[0].v_type != VAR_STRING)
-    {
-	emsg(_(e_invarg));
-	return;
-    }
-
-    group = tv_get_string(&argvars[0]);
-    if (group[0] == '\0')
-	group = NULL;			// global sign group
-    else
-    {
-	group = vim_strsave(group);
-	if (group == NULL)
-	    return;
-    }
-
-    if (argvars[1].v_type != VAR_UNKNOWN)
-    {
-	if (argvars[1].v_type != VAR_DICT)
-	{
-	    emsg(_(e_dictreq));
-	    goto cleanup;
-	}
-	dict = argvars[1].vval.v_dict;
-
-	if ((di = dict_find(dict, (char_u *)"buffer", -1)) != NULL)
-	{
-	    buf = get_buf_arg(&di->di_tv);
-	    if (buf == NULL)
-		goto cleanup;
-	}
-	if (dict_find(dict, (char_u *)"id", -1) != NULL)
-	    sign_id = dict_get_number(dict, (char_u *)"id");
-    }
-
-    if (buf == NULL)
-    {
-	// Delete the sign in all the buffers
-	FOR_ALL_BUFFERS(buf)
-	    if (sign_unplace(sign_id, group, buf, 0) == OK)
-		rettv->vval.v_number = 0;
-    }
-    else
-    {
-	if (sign_unplace(sign_id, group, buf, 0) == OK)
-	    rettv->vval.v_number = 0;
-    }
-
-cleanup:
-    vim_free(group);
-}
-#endif
 
 /*
  * "simplify()" function
