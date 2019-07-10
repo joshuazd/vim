@@ -184,14 +184,24 @@ set_mousemoved_values(win_T *wp)
     static void
 set_mousemoved_columns(win_T *wp, int flags)
 {
+    win_T	*textwp;
     char_u	*text;
     int		col;
+    pos_T	pos;
+    colnr_T	mcol;
 
     if (find_word_under_cursor(mouse_row, mouse_col, TRUE, flags,
-						NULL, NULL, &text, &col) == OK)
+				  &textwp, &pos.lnum, &text, NULL, &col) == OK)
     {
-	wp->w_popup_mouse_mincol = col;
-	wp->w_popup_mouse_maxcol = col + STRLEN(text) - 1;
+	// convert text column to mouse column
+	pos.col = col;
+	pos.coladd = 0;
+	getvcol(textwp, &pos, &mcol, NULL, NULL);
+	wp->w_popup_mouse_mincol = mcol;
+
+	pos.col = col + STRLEN(text) - 1;
+	getvcol(textwp, &pos, NULL, NULL, &mcol);
+	wp->w_popup_mouse_maxcol = mcol;
 	vim_free(text);
     }
 }
@@ -880,7 +890,9 @@ popup_adjust_position(win_T *wp)
     wp->w_width = 1;
     for (lnum = wp->w_topline; lnum <= wp->w_buffer->b_ml.ml_line_count; ++lnum)
     {
-	int len = vim_strsize(ml_get_buf(wp->w_buffer, lnum, FALSE));
+	// count Tabs for what they are worth
+	int len = win_linetabsize(wp, ml_get_buf(wp->w_buffer, lnum, FALSE),
+							      (colnr_T)MAXCOL);
 
 	if (wp->w_p_wrap)
 	{

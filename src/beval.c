@@ -27,10 +27,12 @@ find_word_under_cursor(
 	win_T	    **winp,	// can be NULL
 	linenr_T    *lnump,	// can be NULL
 	char_u	    **textp,
-	int	    *colp)
+	int	    *colp,	// column where mouse hovers, can be NULL
+	int	    *startcolp) // column where text starts, can be NULL
 {
     int		row = mouserow;
     int		col = mousecol;
+    int		scol;
     win_T	*wp;
     char_u	*lbuf;
     linenr_T	lnum;
@@ -98,8 +100,8 @@ find_word_under_cursor(
 		    {
 			// Find the word under the cursor.
 			++emsg_off;
-			len = find_ident_at_pos(wp, lnum, (colnr_T)col, &lbuf,
-									flags);
+			len = find_ident_at_pos(wp, lnum, (colnr_T)col,
+							  &lbuf, &scol, flags);
 			--emsg_off;
 			if (len == 0)
 			    return FAIL;
@@ -112,7 +114,10 @@ find_word_under_cursor(
 		if (lnump != NULL)
 		    *lnump = lnum;
 		*textp = lbuf;
-		*colp = col;
+		if (colp != NULL)
+		    *colp = col;
+		if (startcolp != NULL)
+		    *startcolp = scol;
 		return OK;
 	    }
 	}
@@ -131,24 +136,16 @@ find_word_under_cursor(
  */
     int
 get_beval_info(
-    BalloonEval	*beval,
-    int		getword,
-    win_T	**winp,
-    linenr_T	*lnump,
-    char_u	**textp,
-    int		*colp)
+	BalloonEval	*beval,
+	int		getword,
+	win_T		**winp,
+	linenr_T	*lnump,
+	char_u		**textp,
+	int		*colp)
 {
-    int		row, col;
+    int		row = mouse_row;
+    int		col = mouse_col;
 
-# ifdef FEAT_BEVAL_TERM
-#  ifdef FEAT_GUI
-    if (!gui.in_use)
-#  endif
-    {
-	row = mouse_row;
-	col = mouse_col;
-    }
-# endif
 # ifdef FEAT_GUI
     if (gui.in_use)
     {
@@ -158,7 +155,7 @@ get_beval_info(
 #endif
     if (find_word_under_cursor(row, col, getword,
 		FIND_IDENT + FIND_STRING + FIND_EVAL,
-		winp, lnump, textp, colp) == OK)
+		winp, lnump, textp, colp, NULL) == OK)
     {
 #ifdef FEAT_VARTABS
 	vim_free(beval->vts);
@@ -302,11 +299,15 @@ general_beval_cb(BalloonEval *beval, int state UNUSED)
 
 	    set_vim_var_string(VV_BEVAL_TEXT, NULL, -1);
 	    if (result != NULL && result[0] != NUL)
-	    {
 		post_balloon(beval, result, NULL);
-		recursive = FALSE;
-		return;
-	    }
+
+	    // The 'balloonexpr' evaluation may show something on the screen
+	    // that requires a screen update.
+	    if (must_redraw)
+		redraw_after_callback(FALSE);
+
+	    recursive = FALSE;
+	    return;
 	}
     }
 #endif
