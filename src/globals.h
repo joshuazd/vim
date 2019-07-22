@@ -190,6 +190,7 @@ EXTERN int	emsg_severe INIT(= FALSE);   /* use message of next of several
 EXTERN int	did_endif INIT(= FALSE);    /* just had ":endif" */
 EXTERN dict_T	vimvardict;		    /* Dictionary with v: variables */
 EXTERN dict_T	globvardict;		    /* Dictionary with g: variables */
+#define globvarht globvardict.dv_hashtab
 #endif
 EXTERN int	did_emsg;		    /* set by emsg() when the message
 					       is displayed or thrown */
@@ -354,9 +355,6 @@ EXTERN char_u	hash_removed;
 
 EXTERN int	scroll_region INIT(= FALSE); /* term supports scroll region */
 EXTERN int	t_colors INIT(= 0);	    /* int value of T_CCO */
-
-// highlight groups for 'highlight' option
-EXTERN garray_T highlight_ga INIT(= {0 COMMA 0 COMMA sizeof(hl_group_T) COMMA 10 COMMA NULL});
 
 #ifdef FEAT_CMDL_COMPL
 // Flags to indicate an additional string for highlight name completion.

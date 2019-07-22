@@ -780,6 +780,7 @@ OBJ = \
 	$(OUTDIR)\undo.obj \
 	$(OUTDIR)\usercmd.obj \
 	$(OUTDIR)\userfunc.obj \
+	$(OUTDIR)\viminfo.obj \
 	$(OUTDIR)\winclip.obj \
 	$(OUTDIR)\window.obj \
 
@@ -1280,9 +1281,9 @@ $(VIMDLLBASE).dll: $(OUTDIR) $(OBJ) $(XDIFF_OBJ) $(GUI_OBJ) $(CUI_OBJ) $(OLE_OBJ
 		version.c version.h
 	$(CC) $(CFLAGS_OUTDIR) version.c
 	$(link) @<<
-$(LINKARGS1) /dll -out:$(VIMDLLBASE).dll $(OBJ) $(XDIFF_OBJ) $(GUI_OBJ) $(CUI_OBJ) $(OLE_OBJ) \
-$(LUA_OBJ) $(MZSCHEME_OBJ) $(PERL_OBJ) $(PYTHON_OBJ) $(PYTHON3_OBJ) $(RUBY_OBJ) \
-$(TCL_OBJ) $(CSCOPE_OBJ) $(TERM_OBJ) $(SOUND_OBJ) $(NETBEANS_OBJ) $(CHANNEL_OBJ) \
+$(LINKARGS1) /dll -out:$(VIMDLLBASE).dll $(OBJ) $(XDIFF_OBJ) $(GUI_OBJ) $(CUI_OBJ) $(OLE_OBJ)
+$(LUA_OBJ) $(MZSCHEME_OBJ) $(PERL_OBJ) $(PYTHON_OBJ) $(PYTHON3_OBJ) $(RUBY_OBJ)
+$(TCL_OBJ) $(CSCOPE_OBJ) $(TERM_OBJ) $(SOUND_OBJ) $(NETBEANS_OBJ) $(CHANNEL_OBJ)
 $(XPM_OBJ) $(OUTDIR)\version.obj $(LINKARGS2)
 <<
 
@@ -1302,9 +1303,9 @@ $(VIM).exe: $(OUTDIR) $(OBJ) $(XDIFF_OBJ) $(GUI_OBJ) $(CUI_OBJ) $(OLE_OBJ) $(OLE
 		version.c version.h
 	$(CC) $(CFLAGS_OUTDIR) version.c
 	$(link) @<<
-$(LINKARGS1) /subsystem:$(SUBSYSTEM) -out:$(VIM).exe $(OBJ) $(XDIFF_OBJ) $(GUI_OBJ) $(CUI_OBJ) $(OLE_OBJ) \
-$(LUA_OBJ) $(MZSCHEME_OBJ) $(PERL_OBJ) $(PYTHON_OBJ) $(PYTHON3_OBJ) $(RUBY_OBJ) \
-$(TCL_OBJ) $(CSCOPE_OBJ) $(TERM_OBJ) $(SOUND_OBJ) $(NETBEANS_OBJ) $(CHANNEL_OBJ) \
+$(LINKARGS1) /subsystem:$(SUBSYSTEM) -out:$(VIM).exe $(OBJ) $(XDIFF_OBJ) $(GUI_OBJ) $(CUI_OBJ) $(OLE_OBJ)
+$(LUA_OBJ) $(MZSCHEME_OBJ) $(PERL_OBJ) $(PYTHON_OBJ) $(PYTHON3_OBJ) $(RUBY_OBJ)
+$(TCL_OBJ) $(CSCOPE_OBJ) $(TERM_OBJ) $(SOUND_OBJ) $(NETBEANS_OBJ) $(CHANNEL_OBJ)
 $(XPM_OBJ) $(OUTDIR)\version.obj $(LINKARGS2)
 <<
 	if exist $(VIM).exe.manifest mt.exe -nologo -manifest $(VIM).exe.manifest -updateresource:$(VIM).exe;1
@@ -1643,6 +1644,8 @@ $(OUTDIR)/usercmd.obj:	$(OUTDIR) usercmd.c  $(INCL)
 
 $(OUTDIR)/userfunc.obj:	$(OUTDIR) userfunc.c  $(INCL)
 
+$(OUTDIR)/viminfo.obj:	$(OUTDIR) viminfo.c  $(INCL)
+
 $(OUTDIR)/window.obj:	$(OUTDIR) window.c  $(INCL)
 
 $(OUTDIR)/xpm_w32.obj: $(OUTDIR) xpm_w32.c
@@ -1798,6 +1801,7 @@ proto.h: \
 	proto/undo.pro \
 	proto/usercmd.pro \
 	proto/userfunc.pro \
+	proto/viminfo.pro \
 	proto/window.pro \
 	$(SOUND_PRO) \
 	$(NETBEANS_PRO) \

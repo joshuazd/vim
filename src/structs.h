@@ -999,56 +999,6 @@ struct syn_state
 };
 #endif // FEAT_SYN_HL
 
-/*
- * Structure that stores information about a highlight group.
- * The ID of a highlight group is also called group ID.  It is the index in
- * the highlight_ga array PLUS ONE.
- */
-typedef struct
-{
-    char_u	*sg_name;	// highlight group name
-    char_u	*sg_name_u;	// uppercase of sg_name
-    int		sg_cleared;	// "hi clear" was used
-// for normal terminals
-    int		sg_term;	// "term=" highlighting attributes
-    char_u	*sg_start;	// terminal string for start highl
-    char_u	*sg_stop;	// terminal string for stop highl
-    int		sg_term_attr;	// Screen attr for term mode
-// for color terminals
-    int		sg_cterm;	// "cterm=" highlighting attr
-    int		sg_cterm_bold;	// bold attr was set for light color
-    int		sg_cterm_fg;	// terminal fg color number + 1
-    int		sg_cterm_bg;	// terminal bg color number + 1
-    int		sg_cterm_attr;	// Screen attr for color term mode
-// for when using the GUI
-#if defined(FEAT_GUI) || defined(FEAT_TERMGUICOLORS)
-    guicolor_T	sg_gui_fg;	// GUI foreground color handle
-    guicolor_T	sg_gui_bg;	// GUI background color handle
-#endif
-#ifdef FEAT_GUI
-    guicolor_T	sg_gui_sp;	// GUI special color handle
-    GuiFont	sg_font;	// GUI font handle
-#ifdef FEAT_XFONTSET
-    GuiFontset	sg_fontset;	// GUI fontset handle
-#endif
-    char_u	*sg_font_name;  // GUI font or fontset name
-    int		sg_gui_attr;    // Screen attr for GUI mode
-#endif
-#if defined(FEAT_GUI) || defined(FEAT_EVAL)
-// Store the sp color name for the GUI or synIDattr()
-    int		sg_gui;		// "gui=" highlighting attributes
-    char_u	*sg_gui_fg_name;// GUI foreground color name
-    char_u	*sg_gui_bg_name;// GUI background color name
-    char_u	*sg_gui_sp_name;// GUI special color name
-#endif
-    int		sg_link;	// link to this highlight group ID
-    int		sg_set;		// combination of SG_* flags
-#ifdef FEAT_EVAL
-    sctx_T	sg_script_ctx;	// script in which the group was last set
-#endif
-} hl_group_T;
-
-#define HL_TABLE()	((hl_group_T *)((highlight_ga.ga_data)))
 #define MAX_HL_ID       20000	// maximum value for a highlight ID.
 
 /*
@@ -1164,6 +1114,17 @@ typedef struct
     int		vir_version;	// viminfo version detected or -1
     garray_T	vir_barlines;	// lines starting with |
 } vir_T;
+
+/*
+ * Structure used for the command line history.
+ */
+typedef struct hist_entry
+{
+    int		hisnum;		/* identifying number */
+    int		viminfo;	/* when TRUE hisstr comes from viminfo */
+    char_u	*hisstr;	/* actual entry, separator char after the NUL */
+    time_t	time_set;	/* when it was typed, zero if unknown */
+} histentry_T;
 
 #define CONV_NONE		0
 #define CONV_TO_UTF8		1
@@ -3774,6 +3735,14 @@ typedef enum {
     CDSCOPE_TABPAGE,	// :tcd
     CDSCOPE_WINDOW	// :lcd
 } cdscope_T;
+
+// Variable flavor
+typedef enum
+{
+    VAR_FLAVOUR_DEFAULT,	/* doesn't start with uppercase */
+    VAR_FLAVOUR_SESSION,	/* starts with uppercase, some lower */
+    VAR_FLAVOUR_VIMINFO		/* all uppercase */
+} var_flavour_T;
 
 // argument for mouse_find_win()
 typedef enum {

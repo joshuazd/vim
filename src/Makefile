@@ -1652,6 +1652,7 @@ BASIC_SRC = \
 	usercmd.c \
 	userfunc.c \
 	version.c \
+	viminfo.c \
 	window.c \
 	$(OS_EXTRA_SRC)
 
@@ -1771,6 +1772,7 @@ OBJ_COMMON = \
 	objects/usercmd.o \
 	objects/userfunc.o \
 	objects/version.o \
+	objects/viminfo.o \
 	objects/window.o \
 	$(GUI_OBJ) \
 	$(TERM_OBJ) \
@@ -1916,6 +1918,7 @@ PRO_AUTO = \
 	usercmd.pro \
 	userfunc.pro \
 	version.pro \
+	viminfo.pro \
 	window.pro \
 	beval.pro \
 	gui_beval.pro \
@@ -3300,6 +3303,9 @@ objects/usercmd.o: usercmd.c
 objects/userfunc.o: userfunc.c
 	$(CCC) -o $@ userfunc.c
 
+objects/viminfo.o: viminfo.c
+	$(CCC) -o $@ viminfo.c
+
 objects/window.o: window.c
 	$(CCC) -o $@ window.c
 
@@ -3748,6 +3754,10 @@ objects/version.o: version.c vim.h protodef.h auto/config.h feature.h os_unix.h 
  auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
  proto.h globals.h version.h
+objects/viminfo.o: viminfo.c vim.h protodef.h auto/config.h feature.h \
+ os_unix.h auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
+ proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
+ proto.h globals.h
 objects/window.o: window.c vim.h protodef.h auto/config.h feature.h os_unix.h \
  auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
