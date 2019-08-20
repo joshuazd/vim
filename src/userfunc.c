@@ -1678,6 +1678,11 @@ call_func(
 	    case ERROR_UNKNOWN:
 		    emsg_funcname(N_("E117: Unknown function: %s"), name);
 		    break;
+	    case ERROR_NOTMETHOD:
+		    emsg_funcname(
+			       N_("E276: Cannot use function as a method: %s"),
+									 name);
+		    break;
 	    case ERROR_DELETED:
 		    emsg_funcname(N_("E933: Function was deleted: %s"), name);
 		    break;
@@ -1685,15 +1690,18 @@ call_func(
 		    emsg_funcname((char *)e_toomanyarg, name);
 		    break;
 	    case ERROR_TOOFEW:
-		    emsg_funcname(N_("E119: Not enough arguments for function: %s"),
+		    emsg_funcname(
+			     N_("E119: Not enough arguments for function: %s"),
 									name);
 		    break;
 	    case ERROR_SCRIPT:
-		    emsg_funcname(N_("E120: Using <SID> not in a script context: %s"),
+		    emsg_funcname(
+			   N_("E120: Using <SID> not in a script context: %s"),
 									name);
 		    break;
 	    case ERROR_DICT:
-		    emsg_funcname(N_("E725: Calling dict function without Dictionary: %s"),
+		    emsg_funcname(
+		      N_("E725: Calling dict function without Dictionary: %s"),
 									name);
 		    break;
 	}
@@ -2785,8 +2793,6 @@ get_expanded_name(char_u *name, int check)
 }
 #endif
 
-#if defined(FEAT_CMDL_COMPL) || defined(PROTO)
-
 /*
  * Function given to ExpandGeneric() to obtain the list of user defined
  * function names.
@@ -2829,8 +2835,6 @@ get_user_func_name(expand_T *xp, int idx)
     }
     return NULL;
 }
-
-#endif /* FEAT_CMDL_COMPL */
 
 /*
  * ":delfunction {name}"
@@ -3157,8 +3161,9 @@ ex_call(exarg_T *eap)
 	if (has_watchexpr())
 	    dbg_check_breakpoint(eap);
 
-	/* Handle a function returning a Funcref, Dictionary or List. */
-	if (handle_subscript(&arg, &rettv, !eap->skip, TRUE) == FAIL)
+	// Handle a function returning a Funcref, Dictionary or List.
+	if (handle_subscript(&arg, &rettv, !eap->skip, TRUE,
+							  name, &name) == FAIL)
 	{
 	    failed = TRUE;
 	    break;

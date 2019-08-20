@@ -1579,6 +1579,7 @@ include testdir/Make_all.mak
 
 BASIC_SRC = \
 	arabic.c \
+	arglist.c \
 	autocmd.c \
 	beval.c \
 	blob.c \
@@ -1586,6 +1587,7 @@ BASIC_SRC = \
 	buffer.c \
 	change.c \
 	charset.c \
+	cmdexpand.c \
 	cmdhist.c \
 	crypt.c \
 	crypt_zip.c \
@@ -1706,12 +1708,14 @@ LINT_SRC = $(BASIC_SRC) $(GUI_SRC) $(HANGULIN_SRC) \
 
 OBJ_COMMON = \
 	objects/arabic.o \
+	objects/arglist.o \
 	objects/autocmd.o \
 	objects/beval.o \
 	objects/buffer.o \
 	objects/change.o \
 	objects/blob.o \
 	objects/blowfish.o \
+	objects/cmdexpand.o \
 	objects/cmdhist.o \
 	objects/crypt.o \
 	objects/crypt_zip.o \
@@ -1846,11 +1850,13 @@ ALL_OBJ = $(OBJ_COMMON) \
 
 PRO_AUTO = \
 	arabic.pro \
+	arglist.pro \
 	autocmd.pro \
 	blowfish.pro \
 	buffer.pro \
 	change.pro \
 	charset.pro \
+	cmdexpand.pro \
 	cmdhist.pro \
 	crypt.pro \
 	crypt_zip.pro \
@@ -2991,6 +2997,9 @@ $(ALL_OBJ): objects/.dirstamp
 objects/arabic.o: arabic.c
 	$(CCC) -o $@ arabic.c
 
+objects/arglist.o: arglist.c
+	$(CCC) -o $@ arglist.c
+
 objects/autocmd.o: autocmd.c
 	$(CCC) -o $@ autocmd.c
 
@@ -3008,6 +3017,9 @@ objects/change.o: change.c
 
 objects/charset.o: charset.c
 	$(CCC) -o $@ charset.c
+
+objects/cmdexpand.o: cmdexpand.c
+	$(CCC) -o $@ cmdexpand.c
 
 objects/cmdhist.o: cmdhist.c
 	$(CCC) -o $@ cmdhist.c
@@ -3478,6 +3490,10 @@ objects/arabic.o: arabic.c vim.h protodef.h auto/config.h feature.h os_unix.h \
  auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
  proto.h globals.h
+objects/arglist.o: arglist.c vim.h protodef.h auto/config.h feature.h os_unix.h \
+ auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
+ proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
+ proto.h globals.h
 objects/autocmd.o: autocmd.c vim.h protodef.h auto/config.h feature.h os_unix.h \
  auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
@@ -3503,6 +3519,10 @@ objects/change.o: change.c vim.h protodef.h auto/config.h feature.h os_unix.h \
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
  proto.h globals.h version.h
 objects/charset.o: charset.c vim.h protodef.h auto/config.h feature.h os_unix.h \
+ auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
+ proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
+ proto.h globals.h
+objects/cmdexpand.o: cmdexpand.c vim.h protodef.h auto/config.h feature.h os_unix.h \
  auto/osdef.h ascii.h keymap.h term.h macros.h option.h beval.h \
  proto/gui_beval.pro structs.h regexp.h gui.h alloc.h ex_cmds.h spell.h \
  proto.h globals.h

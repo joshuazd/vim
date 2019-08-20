@@ -622,6 +622,7 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define POPF_DRAG	0x20	// popup can be moved by dragging
 #define POPF_RESIZE	0x40	// popup can be resized by dragging
 #define POPF_MAPPING	0x80	// mapping keys
+#define POPF_INFO	0x100	// used for info of popup menu
 
 #ifdef FEAT_TEXT_PROP
 # define WIN_IS_POPUP(wp) ((wp)->w_popup_flags != 0)
@@ -2518,6 +2519,7 @@ typedef enum {
 #define ERROR_NONE	5
 #define ERROR_OTHER	6
 #define ERROR_DELETED	7
+#define ERROR_NOTMETHOD	8   // function cannot be used as a method
 
 /* flags for find_name_end() */
 #define FNE_INCL_BR	1	/* include [] in name */

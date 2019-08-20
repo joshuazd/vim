@@ -1108,9 +1108,7 @@ free_all_mem(void)
     free_all_marks();
     alist_clear(&global_alist);
     free_homedir();
-# if defined(FEAT_CMDL_COMPL)
     free_users();
-# endif
     free_search_patterns();
     free_old_sub();
     free_last_insert();
@@ -2819,10 +2817,10 @@ find_special_key(
 		    l = mb_ptr2len(bp + 1);
 		else
 		    l = 1;
-		/* Anything accepted, like <C-?>.
-		 * <C-"> or <M-"> are not special in strings as " is
-		 * the string delimiter. With a backslash it works: <M-\"> */
-		if (!(in_string && bp[1] == '"') && bp[2] == '>')
+		// Anything accepted, like <C-?>.
+		// <C-"> or <M-"> are not special in strings as " is
+		// the string delimiter. With a backslash it works: <M-\">
+		if (!(in_string && bp[1] == '"') && bp[l + 1] == '>')
 		    bp += l;
 		else if (in_string && bp[1] == '\\' && bp[2] == '"'
 							       && bp[3] == '>')
@@ -3041,7 +3039,6 @@ get_special_key_code(char_u *name)
     return 0;
 }
 
-#if defined(FEAT_CMDL_COMPL) || defined(PROTO)
     char_u *
 get_key_name(int i)
 {
@@ -3049,7 +3046,6 @@ get_key_name(int i)
 	return NULL;
     return  key_names_table[i].name;
 }
-#endif
 
 #if defined(FEAT_MOUSE) || defined(PROTO)
 /*
@@ -4485,6 +4481,10 @@ parse_queued_messages(void)
 # endif
 # ifdef FEAT_TERMINAL
 	free_unused_terminals();
+# endif
+# ifdef FEAT_SOUND_CANBERRA
+	if (has_sound_callback_in_queue())
+	    invoke_sound_callback();
 # endif
 	break;
     }
