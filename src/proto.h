@@ -94,9 +94,7 @@ extern int _stricoll(char *a, char *b);
 # include "hashtab.pro"
 # include "highlight.pro"
 # include "indent.pro"
-# ifdef FEAT_INS_EXPAND
 # include "insexpand.pro"
-# endif
 # include "json.pro"
 # include "list.pro"
 # include "blob.pro"
@@ -186,6 +184,7 @@ void qsort(void *base, size_t elm_count, size_t elm_size, int (*cmp)(const void 
 #  include "quickfix.pro"
 # endif
 # include "regexp.pro"
+# include "scriptfile.pro"
 # include "screen.pro"
 # include "session.pro"
 # if defined(FEAT_CRYPT) || defined(FEAT_PERSISTENT_UNDO)

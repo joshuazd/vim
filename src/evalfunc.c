@@ -431,7 +431,7 @@ static funcentry_T global_functions[] =
 #endif
     {"assert_beeps",	1, 2, FEARG_1,	  f_assert_beeps},
     {"assert_equal",	2, 3, FEARG_2,	  f_assert_equal},
-    {"assert_equalfile", 2, 2, 0,	  f_assert_equalfile},
+    {"assert_equalfile", 2, 2, FEARG_1,	  f_assert_equalfile},
     {"assert_exception", 1, 2, 0,	  f_assert_exception},
     {"assert_fails",	1, 3, FEARG_1,	  f_assert_fails},
     {"assert_false",	1, 2, FEARG_1,	  f_assert_false},
@@ -439,7 +439,7 @@ static funcentry_T global_functions[] =
     {"assert_match",	2, 3, FEARG_2,	  f_assert_match},
     {"assert_notequal",	2, 3, FEARG_2,	  f_assert_notequal},
     {"assert_notmatch",	2, 3, FEARG_2,	  f_assert_notmatch},
-    {"assert_report",	1, 1, 0,	  f_assert_report},
+    {"assert_report",	1, 1, FEARG_1,	  f_assert_report},
     {"assert_true",	1, 2, FEARG_1,	  f_assert_true},
 #ifdef FEAT_FLOAT
     {"atan",		1, 1, FEARG_1,	  f_atan},
@@ -457,55 +457,53 @@ static funcentry_T global_functions[] =
     {"bufadd",		1, 1, FEARG_1,	  f_bufadd},
     {"bufexists",	1, 1, FEARG_1,	  f_bufexists},
     {"buffer_exists",	1, 1, FEARG_1,	  f_bufexists},	// obsolete
-    {"buffer_name",	1, 1, 0,	  f_bufname},	// obsolete
-    {"buffer_number",	1, 1, 0,	  f_bufnr},	// obsolete
+    {"buffer_name",	0, 1, FEARG_1,	  f_bufname},	// obsolete
+    {"buffer_number",	0, 1, FEARG_1,	  f_bufnr},	// obsolete
     {"buflisted",	1, 1, FEARG_1,	  f_buflisted},
     {"bufload",		1, 1, FEARG_1,	  f_bufload},
     {"bufloaded",	1, 1, FEARG_1,	  f_bufloaded},
-    {"bufname",		1, 1, FEARG_1,	  f_bufname},
-    {"bufnr",		1, 2, FEARG_1,	  f_bufnr},
-    {"bufwinid",	1, 1, 0,	  f_bufwinid},
-    {"bufwinnr",	1, 1, 0,	  f_bufwinnr},
-    {"byte2line",	1, 1, 0,	  f_byte2line},
-    {"byteidx",		2, 2, 0,	  f_byteidx},
-    {"byteidxcomp",	2, 2, 0,	  f_byteidxcomp},
-    {"call",		2, 3, 0,	  f_call},
+    {"bufname",		0, 1, FEARG_1,	  f_bufname},
+    {"bufnr",		0, 2, FEARG_1,	  f_bufnr},
+    {"bufwinid",	1, 1, FEARG_1,	  f_bufwinid},
+    {"bufwinnr",	1, 1, FEARG_1,	  f_bufwinnr},
+    {"byte2line",	1, 1, FEARG_1,	  f_byte2line},
+    {"byteidx",		2, 2, FEARG_1,	  f_byteidx},
+    {"byteidxcomp",	2, 2, FEARG_1,	  f_byteidxcomp},
+    {"call",		2, 3, FEARG_1,	  f_call},
 #ifdef FEAT_FLOAT
     {"ceil",		1, 1, FEARG_1,	  f_ceil},
 #endif
 #ifdef FEAT_JOB_CHANNEL
-    {"ch_canread",	1, 1, 0,	  f_ch_canread},
-    {"ch_close",	1, 1, 0,	  f_ch_close},
-    {"ch_close_in",	1, 1, 0,	  f_ch_close_in},
-    {"ch_evalexpr",	2, 3, 0,	  f_ch_evalexpr},
-    {"ch_evalraw",	2, 3, 0,	  f_ch_evalraw},
-    {"ch_getbufnr",	2, 2, 0,	  f_ch_getbufnr},
-    {"ch_getjob",	1, 1, 0,	  f_ch_getjob},
-    {"ch_info",		1, 1, 0,	  f_ch_info},
-    {"ch_log",		1, 2, 0,	  f_ch_log},
-    {"ch_logfile",	1, 2, 0,	  f_ch_logfile},
-    {"ch_open",		1, 2, 0,	  f_ch_open},
-    {"ch_read",		1, 2, 0,	  f_ch_read},
-    {"ch_readblob",	1, 2, 0,	  f_ch_readblob},
-    {"ch_readraw",	1, 2, 0,	  f_ch_readraw},
-    {"ch_sendexpr",	2, 3, 0,	  f_ch_sendexpr},
-    {"ch_sendraw",	2, 3, 0,	  f_ch_sendraw},
-    {"ch_setoptions",	2, 2, 0,	  f_ch_setoptions},
-    {"ch_status",	1, 2, 0,	  f_ch_status},
+    {"ch_canread",	1, 1, FEARG_1,	  f_ch_canread},
+    {"ch_close",	1, 1, FEARG_1,	  f_ch_close},
+    {"ch_close_in",	1, 1, FEARG_1,	  f_ch_close_in},
+    {"ch_evalexpr",	2, 3, FEARG_1,	  f_ch_evalexpr},
+    {"ch_evalraw",	2, 3, FEARG_1,	  f_ch_evalraw},
+    {"ch_getbufnr",	2, 2, FEARG_1,	  f_ch_getbufnr},
+    {"ch_getjob",	1, 1, FEARG_1,	  f_ch_getjob},
+    {"ch_info",		1, 1, FEARG_1,	  f_ch_info},
+    {"ch_log",		1, 2, FEARG_1,	  f_ch_log},
+    {"ch_logfile",	1, 2, FEARG_1,	  f_ch_logfile},
+    {"ch_open",		1, 2, FEARG_1,	  f_ch_open},
+    {"ch_read",		1, 2, FEARG_1,	  f_ch_read},
+    {"ch_readblob",	1, 2, FEARG_1,	  f_ch_readblob},
+    {"ch_readraw",	1, 2, FEARG_1,	  f_ch_readraw},
+    {"ch_sendexpr",	2, 3, FEARG_1,	  f_ch_sendexpr},
+    {"ch_sendraw",	2, 3, FEARG_1,	  f_ch_sendraw},
+    {"ch_setoptions",	2, 2, FEARG_1,	  f_ch_setoptions},
+    {"ch_status",	1, 2, FEARG_1,	  f_ch_status},
 #endif
     {"changenr",	0, 0, 0,	  f_changenr},
-    {"char2nr",		1, 2, 0,	  f_char2nr},
-    {"chdir",		1, 1, 0,	  f_chdir},
-    {"cindent",		1, 1, 0,	  f_cindent},
-    {"clearmatches",	0, 1, 0,	  f_clearmatches},
-    {"col",		1, 1, 0,	  f_col},
-#if defined(FEAT_INS_EXPAND)
-    {"complete",	2, 2, 0,	  f_complete},
-    {"complete_add",	1, 1, 0,	  f_complete_add},
+    {"char2nr",		1, 2, FEARG_1,	  f_char2nr},
+    {"chdir",		1, 1, FEARG_1,	  f_chdir},
+    {"cindent",		1, 1, FEARG_1,	  f_cindent},
+    {"clearmatches",	0, 1, FEARG_1,	  f_clearmatches},
+    {"col",		1, 1, FEARG_1,	  f_col},
+    {"complete",	2, 2, FEARG_2,	  f_complete},
+    {"complete_add",	1, 1, FEARG_1,	  f_complete_add},
     {"complete_check",	0, 0, 0,	  f_complete_check},
-    {"complete_info",	0, 1, 0,	  f_complete_info},
-#endif
-    {"confirm",		1, 4, 0,	  f_confirm},
+    {"complete_info",	0, 1, FEARG_1,	  f_complete_info},
+    {"confirm",		1, 4, FEARG_1,	  f_confirm},
     {"copy",		1, 1, FEARG_1,	  f_copy},
 #ifdef FEAT_FLOAT
     {"cos",		1, 1, FEARG_1,	  f_cos},
@@ -513,59 +511,59 @@ static funcentry_T global_functions[] =
 #endif
     {"count",		2, 4, FEARG_1,	  f_count},
     {"cscope_connection",0,3, 0,	  f_cscope_connection},
-    {"cursor",		1, 3, 0,	  f_cursor},
+    {"cursor",		1, 3, FEARG_1,	  f_cursor},
 #ifdef MSWIN
-    {"debugbreak",	1, 1, 0,	  f_debugbreak},
+    {"debugbreak",	1, 1, FEARG_1,	  f_debugbreak},
 #endif
-    {"deepcopy",	1, 2, 0,	  f_deepcopy},
-    {"delete",		1, 2, 0,	  f_delete},
-    {"deletebufline",	2, 3, 0,	  f_deletebufline},
+    {"deepcopy",	1, 2, FEARG_1,	  f_deepcopy},
+    {"delete",		1, 2, FEARG_1,	  f_delete},
+    {"deletebufline",	2, 3, FEARG_1,	  f_deletebufline},
     {"did_filetype",	0, 0, 0,	  f_did_filetype},
-    {"diff_filler",	1, 1, 0,	  f_diff_filler},
-    {"diff_hlID",	2, 2, 0,	  f_diff_hlID},
+    {"diff_filler",	1, 1, FEARG_1,	  f_diff_filler},
+    {"diff_hlID",	2, 2, FEARG_1,	  f_diff_hlID},
     {"empty",		1, 1, FEARG_1,	  f_empty},
     {"environ",		0, 0, 0,	  f_environ},
-    {"escape",		2, 2, 0,	  f_escape},
+    {"escape",		2, 2, FEARG_1,	  f_escape},
     {"eval",		1, 1, FEARG_1,	  f_eval},
     {"eventhandler",	0, 0, 0,	  f_eventhandler},
-    {"executable",	1, 1, 0,	  f_executable},
-    {"execute",		1, 2, 0,	  f_execute},
-    {"exepath",		1, 1, 0,	  f_exepath},
-    {"exists",		1, 1, 0,	  f_exists},
+    {"executable",	1, 1, FEARG_1,	  f_executable},
+    {"execute",		1, 2, FEARG_1,	  f_execute},
+    {"exepath",		1, 1, FEARG_1,	  f_exepath},
+    {"exists",		1, 1, FEARG_1,	  f_exists},
 #ifdef FEAT_FLOAT
     {"exp",		1, 1, FEARG_1,	  f_exp},
 #endif
-    {"expand",		1, 3, 0,	  f_expand},
-    {"expandcmd",	1, 1, 0,	  f_expandcmd},
+    {"expand",		1, 3, FEARG_1,	  f_expand},
+    {"expandcmd",	1, 1, FEARG_1,	  f_expandcmd},
     {"extend",		2, 3, FEARG_1,	  f_extend},
-    {"feedkeys",	1, 2, 0,	  f_feedkeys},
-    {"file_readable",	1, 1, 0,	  f_filereadable},	// obsolete
-    {"filereadable",	1, 1, 0,	  f_filereadable},
-    {"filewritable",	1, 1, 0,	  f_filewritable},
+    {"feedkeys",	1, 2, FEARG_1,	  f_feedkeys},
+    {"file_readable",	1, 1, FEARG_1,	  f_filereadable},	// obsolete
+    {"filereadable",	1, 1, FEARG_1,	  f_filereadable},
+    {"filewritable",	1, 1, FEARG_1,	  f_filewritable},
     {"filter",		2, 2, FEARG_1,	  f_filter},
-    {"finddir",		1, 3, 0,	  f_finddir},
-    {"findfile",	1, 3, 0,	  f_findfile},
+    {"finddir",		1, 3, FEARG_1,	  f_finddir},
+    {"findfile",	1, 3, FEARG_1,	  f_findfile},
 #ifdef FEAT_FLOAT
     {"float2nr",	1, 1, FEARG_1,	  f_float2nr},
     {"floor",		1, 1, FEARG_1,	  f_floor},
     {"fmod",		2, 2, FEARG_1,	  f_fmod},
 #endif
-    {"fnameescape",	1, 1, 0,	  f_fnameescape},
-    {"fnamemodify",	2, 2, 0,	  f_fnamemodify},
-    {"foldclosed",	1, 1, 0,	  f_foldclosed},
-    {"foldclosedend",	1, 1, 0,	  f_foldclosedend},
-    {"foldlevel",	1, 1, 0,	  f_foldlevel},
+    {"fnameescape",	1, 1, FEARG_1,	  f_fnameescape},
+    {"fnamemodify",	2, 2, FEARG_1,	  f_fnamemodify},
+    {"foldclosed",	1, 1, FEARG_1,	  f_foldclosed},
+    {"foldclosedend",	1, 1, FEARG_1,	  f_foldclosedend},
+    {"foldlevel",	1, 1, FEARG_1,	  f_foldlevel},
     {"foldtext",	0, 0, 0,	  f_foldtext},
-    {"foldtextresult",	1, 1, 0,	  f_foldtextresult},
+    {"foldtextresult",	1, 1, FEARG_1,	  f_foldtextresult},
     {"foreground",	0, 0, 0,	  f_foreground},
-    {"funcref",		1, 3, 0,	  f_funcref},
-    {"function",	1, 3, 0,	  f_function},
+    {"funcref",		1, 3, FEARG_1,	  f_funcref},
+    {"function",	1, 3, FEARG_1,	  f_function},
     {"garbagecollect",	0, 1, 0,	  f_garbagecollect},
     {"get",		2, 3, FEARG_1,	  f_get},
     {"getbufinfo",	0, 1, 0,	  f_getbufinfo},
-    {"getbufline",	2, 3, 0,	  f_getbufline},
-    {"getbufvar",	2, 3, 0,	  f_getbufvar},
-    {"getchangelist",	1, 1, 0,	  f_getchangelist},
+    {"getbufline",	2, 3, FEARG_1,	  f_getbufline},
+    {"getbufvar",	2, 3, FEARG_1,	  f_getbufvar},
+    {"getchangelist",	0, 1, FEARG_1,	  f_getchangelist},
     {"getchar",		0, 1, 0,	  f_getchar},
     {"getcharmod",	0, 0, 0,	  f_getcharmod},
     {"getcharsearch",	0, 0, 0,	  f_getcharsearch},
@@ -573,27 +571,27 @@ static funcentry_T global_functions[] =
     {"getcmdpos",	0, 0, 0,	  f_getcmdpos},
     {"getcmdtype",	0, 0, 0,	  f_getcmdtype},
     {"getcmdwintype",	0, 0, 0,	  f_getcmdwintype},
-    {"getcompletion",	2, 3, 0,	  f_getcompletion},
+    {"getcompletion",	2, 3, FEARG_1,	  f_getcompletion},
     {"getcurpos",	0, 0, 0,	  f_getcurpos},
-    {"getcwd",		0, 2, 0,	  f_getcwd},
-    {"getenv",		1, 1, 0,	  f_getenv},
+    {"getcwd",		0, 2, FEARG_1,	  f_getcwd},
+    {"getenv",		1, 1, FEARG_1,	  f_getenv},
     {"getfontname",	0, 1, 0,	  f_getfontname},
-    {"getfperm",	1, 1, 0,	  f_getfperm},
-    {"getfsize",	1, 1, 0,	  f_getfsize},
-    {"getftime",	1, 1, 0,	  f_getftime},
-    {"getftype",	1, 1, 0,	  f_getftype},
-    {"getjumplist",	0, 2, 0,	  f_getjumplist},
-    {"getline",		1, 2, 0,	  f_getline},
+    {"getfperm",	1, 1, FEARG_1,	  f_getfperm},
+    {"getfsize",	1, 1, FEARG_1,	  f_getfsize},
+    {"getftime",	1, 1, FEARG_1,	  f_getftime},
+    {"getftype",	1, 1, FEARG_1,	  f_getftype},
+    {"getjumplist",	0, 2, FEARG_1,	  f_getjumplist},
+    {"getline",		1, 2, FEARG_1,	  f_getline},
     {"getloclist",	1, 2, 0,	  f_getloclist},
     {"getmatches",	0, 1, 0,	  f_getmatches},
     {"getpid",		0, 0, 0,	  f_getpid},
-    {"getpos",		1, 1, 0,	  f_getpos},
+    {"getpos",		1, 1, FEARG_1,	  f_getpos},
     {"getqflist",	0, 1, 0,	  f_getqflist},
-    {"getreg",		0, 3, 0,	  f_getreg},
-    {"getregtype",	0, 1, 0,	  f_getregtype},
-    {"gettabinfo",	0, 1, 0,	  f_gettabinfo},
-    {"gettabvar",	2, 3, 0,	  f_gettabvar},
-    {"gettabwinvar",	3, 4, 0,	  f_gettabwinvar},
+    {"getreg",		0, 3, FEARG_1,	  f_getreg},
+    {"getregtype",	0, 1, FEARG_1,	  f_getregtype},
+    {"gettabinfo",	0, 1, FEARG_1,	  f_gettabinfo},
+    {"gettabvar",	2, 3, FEARG_1,	  f_gettabvar},
+    {"gettabwinvar",	3, 4, FEARG_1,	  f_gettabwinvar},
     {"gettagstack",	0, 1, 0,	  f_gettagstack},
     {"getwininfo",	0, 1, 0,	  f_getwininfo},
     {"getwinpos",	0, 1, 0,	  f_getwinpos},
@@ -637,12 +635,12 @@ static funcentry_T global_functions[] =
 #endif
     {"items",		1, 1, FEARG_1,	  f_items},
 #ifdef FEAT_JOB_CHANNEL
-    {"job_getchannel",	1, 1, 0,	  f_job_getchannel},
-    {"job_info",	0, 1, 0,	  f_job_info},
-    {"job_setoptions",	2, 2, 0,	  f_job_setoptions},
-    {"job_start",	1, 2, 0,	  f_job_start},
-    {"job_status",	1, 1, 0,	  f_job_status},
-    {"job_stop",	1, 2, 0,	  f_job_stop},
+    {"job_getchannel",	1, 1, FEARG_1,	  f_job_getchannel},
+    {"job_info",	0, 1, FEARG_1,	  f_job_info},
+    {"job_setoptions",	2, 2, FEARG_1,	  f_job_setoptions},
+    {"job_start",	1, 2, FEARG_1,	  f_job_start},
+    {"job_status",	1, 1, FEARG_1,	  f_job_status},
+    {"job_stop",	1, 2, FEARG_1,	  f_job_stop},
 #endif
     {"join",		1, 2, FEARG_1,	  f_join},
     {"js_decode",	1, 1, 0,	  f_js_decode},
@@ -704,9 +702,10 @@ static funcentry_T global_functions[] =
     {"popup_dialog",	2, 2, 0,	  f_popup_dialog},
     {"popup_filter_menu", 2, 2, 0,	  f_popup_filter_menu},
     {"popup_filter_yesno", 2, 2, 0,	  f_popup_filter_yesno},
+    {"popup_findinfo",	0, 0, 0,	  f_popup_findinfo},
+    {"popup_findpreview", 0, 0, 0,	  f_popup_findpreview},
     {"popup_getoptions", 1, 1, 0,	  f_popup_getoptions},
     {"popup_getpos",	1, 1, 0,	  f_popup_getpos},
-    {"popup_getpreview", 0, 0, 0,	  f_popup_getpreview},
     {"popup_hide",	1, 1, 0,	  f_popup_hide},
     {"popup_locate",	2, 2, 0,	  f_popup_locate},
     {"popup_menu",	2, 2, 0,	  f_popup_menu},
@@ -794,7 +793,7 @@ static funcentry_T global_functions[] =
     {"setcharsearch",	1, 1, 0,	  f_setcharsearch},
     {"setcmdpos",	1, 1, 0,	  f_setcmdpos},
     {"setenv",		2, 2, 0,	  f_setenv},
-    {"setfperm",	2, 2, 0,	  f_setfperm},
+    {"setfperm",	2, 2, FEARG_1,	  f_setfperm},
     {"setline",		2, 2, 0,	  f_setline},
     {"setloclist",	2, 4, 0,	  f_setloclist},
     {"setmatches",	1, 2, 0,	  f_setmatches},
@@ -964,7 +963,7 @@ static funcentry_T global_functions[] =
     {"win_id2tabwin",	1, 1, 0,	  f_win_id2tabwin},
     {"win_id2win",	1, 1, 0,	  f_win_id2win},
     {"win_screenpos",	1, 1, 0,	  f_win_screenpos},
-    {"winbufnr",	1, 1, 0,	  f_winbufnr},
+    {"winbufnr",	1, 1, FEARG_1,	  f_winbufnr},
     {"wincol",		0, 0, 0,	  f_wincol},
     {"winheight",	1, 1, 0,	  f_winheight},
     {"winlayout",	0, 1, 0,	  f_winlayout},
@@ -1821,15 +1820,20 @@ f_bufname(typval_T *argvars, typval_T *rettv)
 {
     buf_T	*buf;
 
-    (void)tv_get_number(&argvars[0]);	    /* issue errmsg if type error */
-    ++emsg_off;
-    buf = tv_get_buf(&argvars[0], FALSE);
+    if (argvars[0].v_type == VAR_UNKNOWN)
+	buf = curbuf;
+    else
+    {
+	(void)tv_get_number(&argvars[0]);	// issue errmsg if type error
+	++emsg_off;
+	buf = tv_get_buf(&argvars[0], FALSE);
+	--emsg_off;
+    }
     rettv->v_type = VAR_STRING;
     if (buf != NULL && buf->b_fname != NULL)
 	rettv->vval.v_string = vim_strsave(buf->b_fname);
     else
 	rettv->vval.v_string = NULL;
-    --emsg_off;
 }
 
 /*
@@ -1842,13 +1846,18 @@ f_bufnr(typval_T *argvars, typval_T *rettv)
     int		error = FALSE;
     char_u	*name;
 
-    (void)tv_get_number(&argvars[0]);	    /* issue errmsg if type error */
-    ++emsg_off;
-    buf = tv_get_buf(&argvars[0], FALSE);
-    --emsg_off;
+    if (argvars[0].v_type == VAR_UNKNOWN)
+	buf = curbuf;
+    else
+    {
+	(void)tv_get_number(&argvars[0]);    // issue errmsg if type error
+	++emsg_off;
+	buf = tv_get_buf(&argvars[0], FALSE);
+	--emsg_off;
+    }
 
-    /* If the buffer isn't found and the second argument is not zero create a
-     * new buffer. */
+    // If the buffer isn't found and the second argument is not zero create a
+    // new buffer.
     if (buf == NULL
 	    && argvars[1].v_type != VAR_UNKNOWN
 	    && tv_get_number_chk(&argvars[1], &error) != 0
@@ -4468,10 +4477,15 @@ f_getchangelist(typval_T *argvars, typval_T *rettv)
 	return;
 
 #ifdef FEAT_JUMPLIST
-    (void)tv_get_number(&argvars[0]);	    /* issue errmsg if type error */
-    ++emsg_off;
-    buf = tv_get_buf(&argvars[0], FALSE);
-    --emsg_off;
+    if (argvars[0].v_type == VAR_UNKNOWN)
+	buf = curbuf;
+    else
+    {
+	(void)tv_get_number(&argvars[0]);    // issue errmsg if type error
+	++emsg_off;
+	buf = tv_get_buf(&argvars[0], FALSE);
+	--emsg_off;
+    }
     if (buf == NULL)
 	return;
 
@@ -5951,9 +5965,7 @@ f_has(typval_T *argvars, typval_T *rettv)
 #if defined(HAVE_ICONV_H) && defined(USE_ICONV)
 	"iconv",
 #endif
-#ifdef FEAT_INS_EXPAND
 	"insert_expand",
-#endif
 #ifdef FEAT_JOB_CHANNEL
 	"job",
 #endif
@@ -7638,12 +7650,10 @@ f_mode(typval_T *argvars, typval_T *rettv)
 		buf[0] = 'R';
 	    else
 		buf[0] = 'i';
-#ifdef FEAT_INS_EXPAND
 	    if (ins_compl_active())
 		buf[1] = 'c';
 	    else if (ctrl_x_mode_not_defined_yet())
 		buf[1] = 'x';
-#endif
 	}
     }
     else if ((State & CMDLINE) || exmode_active)
@@ -7886,9 +7896,7 @@ f_pum_getpos(typval_T *argvars UNUSED, typval_T *rettv UNUSED)
 {
     if (rettv_dict_alloc(rettv) != OK)
 	return;
-#ifdef FEAT_INS_EXPAND
     pum_set_event_info(rettv->vval.v_dict);
-#endif
 }
 
 /*
@@ -7897,10 +7905,8 @@ f_pum_getpos(typval_T *argvars UNUSED, typval_T *rettv UNUSED)
     static void
 f_pumvisible(typval_T *argvars UNUSED, typval_T *rettv UNUSED)
 {
-#ifdef FEAT_INS_EXPAND
     if (pum_visible())
 	rettv->vval.v_number = 1;
-#endif
 }
 
 #ifdef FEAT_PYTHON3
