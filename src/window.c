@@ -4892,8 +4892,10 @@ win_free(
     win_free_lsize(wp);
 
     for (i = 0; i < wp->w_tagstacklen; ++i)
+    {
 	vim_free(wp->w_tagstack[i].tagname);
-
+	vim_free(wp->w_tagstack[i].user_data);
+    }
     vim_free(wp->w_localdir);
 
     /* Remove the window from the b_wininfo lists, it may happen that the
@@ -6814,6 +6816,87 @@ frame_check_width(frame_T *topfrp, int width)
     return TRUE;
 }
 
+#if defined(FEAT_SYN_HL) || defined(PROTO)
+/*
+ * Simple int comparison function for use with qsort()
+ */
+    static int
+int_cmp(const void *a, const void *b)
+{
+    return *(const int *)a - *(const int *)b;
+}
+
+/*
+ * Handle setting 'colorcolumn' or 'textwidth' in window "wp".
+ * Returns error message, NULL if it's OK.
+ */
+    char *
+check_colorcolumn(win_T *wp)
+{
+    char_u	*s;
+    int		col;
+    int		count = 0;
+    int		color_cols[256];
+    int		i;
+    int		j = 0;
+
+    if (wp->w_buffer == NULL)
+	return NULL;  // buffer was closed
+
+    for (s = wp->w_p_cc; *s != NUL && count < 255;)
+    {
+	if (*s == '-' || *s == '+')
+	{
+	    // -N and +N: add to 'textwidth'
+	    col = (*s == '-') ? -1 : 1;
+	    ++s;
+	    if (!VIM_ISDIGIT(*s))
+		return e_invarg;
+	    col = col * getdigits(&s);
+	    if (wp->w_buffer->b_p_tw == 0)
+		goto skip;  // 'textwidth' not set, skip this item
+	    col += wp->w_buffer->b_p_tw;
+	    if (col < 0)
+		goto skip;
+	}
+	else if (VIM_ISDIGIT(*s))
+	    col = getdigits(&s);
+	else
+	    return e_invarg;
+	color_cols[count++] = col - 1;  // 1-based to 0-based
+skip:
+	if (*s == NUL)
+	    break;
+	if (*s != ',')
+	    return e_invarg;
+	if (*++s == NUL)
+	    return e_invarg;  // illegal trailing comma as in "set cc=80,"
+    }
+
+    vim_free(wp->w_p_cc_cols);
+    if (count == 0)
+	wp->w_p_cc_cols = NULL;
+    else
+    {
+	wp->w_p_cc_cols = ALLOC_MULT(int, count + 1);
+	if (wp->w_p_cc_cols != NULL)
+	{
+	    // sort the columns for faster usage on screen redraw inside
+	    // win_line()
+	    qsort(color_cols, count, sizeof(int), int_cmp);
+
+	    for (i = 0; i < count; ++i)
+		// skip duplicates
+		if (j == 0 || wp->w_p_cc_cols[j - 1] != color_cols[i])
+		    wp->w_p_cc_cols[j++] = color_cols[i];
+	    wp->w_p_cc_cols[j] = -1;  // end marker
+	}
+    }
+
+    return NULL;  // no error
+}
+#endif
+
 #if defined(FEAT_EVAL) || defined(PROTO)
     int
 win_getid(typval_T *argvars)
@@ -6967,6 +7050,109 @@ win_findbuf(typval_T *argvars, list_T *list)
     FOR_ALL_TAB_WINDOWS(tp, wp)
 	    if (wp->w_buffer->b_fnum == bufnr)
 		list_append_number(list, wp->w_id);
+}
+
+/*
+ * Find window specified by "vp" in tabpage "tp".
+ */
+    win_T *
+find_win_by_nr(
+    typval_T	*vp,
+    tabpage_T	*tp)	// NULL for current tab page
+{
+    win_T	*wp;
+    int		nr = (int)tv_get_number_chk(vp, NULL);
+
+    if (nr < 0)
+	return NULL;
+    if (nr == 0)
+	return curwin;
+
+    FOR_ALL_WINDOWS_IN_TAB(tp, wp)
+    {
+	if (nr >= LOWEST_WIN_ID)
+	{
+	    if (wp->w_id == nr)
+		return wp;
+	}
+	else if (--nr <= 0)
+	    break;
+    }
+    if (nr >= LOWEST_WIN_ID)
+    {
+#ifdef FEAT_TEXT_PROP
+	// check tab-local popup windows
+	for (wp = tp->tp_first_popupwin; wp != NULL; wp = wp->w_next)
+	    if (wp->w_id == nr)
+		return wp;
+	// check global popup windows
+	for (wp = first_popupwin; wp != NULL; wp = wp->w_next)
+	    if (wp->w_id == nr)
+		return wp;
+#endif
+	return NULL;
+    }
+    return wp;
+}
+
+/*
+ * Find a window: When using a Window ID in any tab page, when using a number
+ * in the current tab page.
+ */
+    win_T *
+find_win_by_nr_or_id(typval_T *vp)
+{
+    int	nr = (int)tv_get_number_chk(vp, NULL);
+
+    if (nr >= LOWEST_WIN_ID)
+	return win_id2wp(tv_get_number(vp));
+    return find_win_by_nr(vp, NULL);
+}
+
+/*
+ * Find window specified by "wvp" in tabpage "tvp".
+ * Returns the tab page in 'ptp'
+ */
+    win_T *
+find_tabwin(
+    typval_T	*wvp,	// VAR_UNKNOWN for current window
+    typval_T	*tvp,	// VAR_UNKNOWN for current tab page
+    tabpage_T	**ptp)
+{
+    win_T	*wp = NULL;
+    tabpage_T	*tp = NULL;
+    long	n;
+
+    if (wvp->v_type != VAR_UNKNOWN)
+    {
+	if (tvp->v_type != VAR_UNKNOWN)
+	{
+	    n = (long)tv_get_number(tvp);
+	    if (n >= 0)
+		tp = find_tabpage(n);
+	}
+	else
+	    tp = curtab;
+
+	if (tp != NULL)
+	{
+	    wp = find_win_by_nr(wvp, tp);
+	    if (wp == NULL && wvp->v_type == VAR_NUMBER
+						&& wvp->vval.v_number != -1)
+		// A window with the specified number is not found
+		tp = NULL;
+	}
+    }
+    else
+    {
+	wp = curwin;
+	tp = curtab;
+    }
+
+    if (ptp != NULL)
+	*ptp = tp;
+
+    return wp;
 }
 
 /*

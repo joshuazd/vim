@@ -82,6 +82,7 @@ void restore_buffer(bufref_T *save_curbuf);
 int win_hasvertsplit(void);
 int get_win_number(win_T *wp, win_T *first_win);
 int get_tab_number(tabpage_T *tp);
+char *check_colorcolumn(win_T *wp);
 int win_getid(typval_T *argvars);
 int win_gotoid(typval_T *argvars);
 void win_id2tabwin(typval_T *argvars, list_T *list);
@@ -89,5 +90,8 @@ win_T *win_id2wp(int id);
 win_T *win_id2wp_tp(int id, tabpage_T **tpp);
 int win_id2win(typval_T *argvars);
 void win_findbuf(typval_T *argvars, list_T *list);
+win_T *find_win_by_nr(typval_T *vp, tabpage_T *tp);
+win_T *find_win_by_nr_or_id(typval_T *vp);
+win_T *find_tabwin(typval_T *wvp, typval_T *tvp, tabpage_T **ptp);
 void get_framelayout(frame_T *fr, list_T *l, int outer);
 /* vim: set ft=c : */

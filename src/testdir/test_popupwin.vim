@@ -313,14 +313,18 @@ func Test_popup_firstline()
 
   let lines =<< trim END
 	call setline(1, range(1, 20))
-	call popup_create(['1111', '222222', '33333', '44', '5', '666666', '77777', '888', '9999999999999999'], #{
+	let winid = popup_create(['1111', '222222', '33333', '44', '5', '666666', '77777', '888', '9999999999999999'], #{
 	      \ maxheight: 4,
 	      \ firstline: 3,
 	      \ })
   END
   call writefile(lines, 'XtestPopupFirstline')
   let buf = RunVimInTerminal('-S XtestPopupFirstline', #{rows: 10})
-  call VerifyScreenDump(buf, 'Test_popupwin_firstline', {})
+  call VerifyScreenDump(buf, 'Test_popupwin_firstline_1', {})
+
+  call term_sendkeys(buf, ":call popup_setoptions(winid, #{firstline: -1})\<CR>")
+  call term_sendkeys(buf, ":\<CR>")
+  call VerifyScreenDump(buf, 'Test_popupwin_firstline_2', {})
 
   " clean up
   call StopVimInTerminal(buf)
@@ -333,6 +337,58 @@ func Test_popup_firstline()
   call assert_equal(3, popup_getoptions(winid).firstline)
   call popup_setoptions(winid, #{firstline: 1})
   call assert_equal(1, popup_getoptions(winid).firstline)
+  call popup_close(winid)
+
+  let winid = popup_create(['xxx']->repeat(50), #{
+	\ maxheight: 3,
+	\ firstline: 11,
+	\ })
+  redraw
+  call assert_equal(11, popup_getoptions(winid).firstline)
+  call assert_equal(11, popup_getpos(winid).firstline)
+  " check line() works with popup window
+  call assert_equal(11, line('.', winid))
+  call assert_equal(50, line('$', winid))
+  call assert_equal(0, line('$', 123456))
+
+  " Normal command changes what is displayed but not "firstline"
+  call win_execute(winid, "normal! \<c-y>")
+  call assert_equal(11, popup_getoptions(winid).firstline)
+  call assert_equal(10, popup_getpos(winid).firstline)
+
+  " Making some property change applies "firstline" again
+  call popup_setoptions(winid, #{line: 4})
+  call assert_equal(11, popup_getoptions(winid).firstline)
+  call assert_equal(11, popup_getpos(winid).firstline)
+
+  " Remove "firstline" property and scroll
+  call popup_setoptions(winid, #{firstline: 0})
+  call win_execute(winid, "normal! \<c-y>")
+  call assert_equal(0, popup_getoptions(winid).firstline)
+  call assert_equal(10, popup_getpos(winid).firstline)
+
+  " Making some property change has no side effect
+  call popup_setoptions(winid, #{line: 3})
+  call assert_equal(0, popup_getoptions(winid).firstline)
+  call assert_equal(10, popup_getpos(winid).firstline)
+
+  call popup_close(winid)
+endfunc
+
+func Test_popup_noscrolloff()
+  set scrolloff=5
+  let winid = popup_create(['xxx']->repeat(50), #{
+	\ maxheight: 5,
+	\ firstline: 11,
+	\ })
+  redraw
+  call assert_equal(11, popup_getoptions(winid).firstline)
+  call assert_equal(11, popup_getpos(winid).firstline)
+
+  call popup_setoptions(winid, #{firstline: 0})
+  call win_execute(winid, "normal! \<c-y>")
+  call assert_equal(0, popup_getoptions(winid).firstline)
+  call assert_equal(10, popup_getpos(winid).firstline)
 
   call popup_close(winid)
 endfunc
@@ -985,14 +1041,18 @@ func Test_popup_option_values()
   " global/buffer-local
   setlocal path=/there
   " global/window-local
-  setlocal scrolloff=9
+  setlocal statusline=2
 
   let winid = popup_create('hello', {})
   call assert_equal(0, getwinvar(winid, '&number'))
   call assert_equal(1, getwinvar(winid, '&wrap'))
   call assert_equal('', getwinvar(winid, '&omnifunc'))
   call assert_equal(&g:path, getwinvar(winid, '&path'))
-  call assert_equal(&g:scrolloff, getwinvar(winid, '&scrolloff'))
+  call assert_equal(&g:statusline, getwinvar(winid, '&statusline'))
+
+  " 'scrolloff' is reset to zero
+  call assert_equal(5, &scrolloff)
+  call assert_equal(0, getwinvar(winid, '&scrolloff'))
 
   call popup_close(winid)
   bwipe
@@ -1344,7 +1404,6 @@ func Test_popup_never_behind()
   " |                             |
   " +-----------------------------+
   let lines =<< trim END
-    only 
     split
     vsplit
     let info_window1 = getwininfo()[0]
@@ -1615,11 +1674,12 @@ func Test_notifications()
   CheckFeature timers
   CheckScreendump
 
-  call writefile([
-	\ "call setline(1, range(1, 20))",
-	\ "hi Notification ctermbg=lightblue",
-	\ "call popup_notification('first notification', {})",
-	\], 'XtestNotifications')
+  let lines =<< trim END
+	call setline(1, range(1, 20))
+	hi Notification ctermbg=lightblue
+	call popup_notification('first notification', {})
+  END
+  call writefile(lines, 'XtestNotifications')
   let buf = RunVimInTerminal('-S XtestNotifications', #{rows: 10})
   call VerifyScreenDump(buf, 'Test_popupwin_notify_01', {})
 
@@ -1678,7 +1738,8 @@ func Test_popup_scrollbar()
   call term_sendkeys(buf, ":\<CR>")
   call VerifyScreenDump(buf, 'Test_popupwin_scroll_4', {})
 
-  call term_sendkeys(buf, ":call popup_setoptions(winid, #{scrollbarhighlight: 'ScrollBar', thumbhighlight: 'ScrollThumb'})\<CR>")
+  call term_sendkeys(buf, ":call popup_setoptions(winid, #{scrollbarhighlight: 'ScrollBar', thumbhighlight: 'ScrollThumb', firstline: 5})\<CR>")
+  " this scrolls two lines (half the window height)
   call term_sendkeys(buf, ":call ScrollUp()\<CR>")
   call VerifyScreenDump(buf, 'Test_popupwin_scroll_5', {})
 
@@ -1698,6 +1759,10 @@ func Test_popup_scrollbar()
 
   call term_sendkeys(buf, ":call ClickBot()\<CR>")
   call VerifyScreenDump(buf, 'Test_popupwin_scroll_9', {})
+
+  " remove the minwidth and maxheight
+  call term_sendkeys(buf, ":call popup_setoptions(winid, #{maxheight: 0, minwidth: 0})\<CR>")
+  call VerifyScreenDump(buf, 'Test_popupwin_scroll_10', {})
 
   " clean up
   call StopVimInTerminal(buf)
@@ -1819,7 +1884,7 @@ func Test_popupwin_garbage_collect()
   let winid = popup_create('something', #{filter: function('MyPopupFilter', [{}])})
   call test_garbagecollect_now()
   redraw
-  " Must not crach caused by invalid memory access
+  " Must not crash caused by invalid memory access
   call feedkeys('j', 'xt')
   call assert_true(v:true)
 
@@ -1856,6 +1921,31 @@ func Test_popupwin_with_buffer()
   redraw
   call popup_close(winid)
   call delete('XsomeFile')
+endfunc
+
+func Test_popupwin_with_buffer_and_filter()
+  new Xwithfilter
+  call setline(1, range(100))
+  let bufnr = bufnr()
+  hide
+
+  func BufferFilter(win, key)
+    if a:key == 'G'
+      " recursive use of "G" does not cause problems.
+      call win_execute(a:win, 'normal! G')
+      return 1
+    endif
+    return 0
+  endfunc
+
+  let winid = popup_create(bufnr, #{maxheight: 5, filter: 'BufferFilter'})
+  call assert_equal(1, popup_getpos(winid).firstline)
+  redraw
+  call feedkeys("G", 'xt')
+  call assert_equal(99, popup_getpos(winid).firstline)
+
+  call popup_close(winid)
+  exe 'bwipe! ' .. bufnr
 endfunc
 
 func Test_popupwin_width()
