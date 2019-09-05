@@ -84,6 +84,7 @@ extern int _stricoll(char *a, char *b);
 # include "ex_eval.pro"
 # include "ex_getln.pro"
 # include "fileio.pro"
+# include "filepath.pro"
 # include "findfile.pro"
 # include "fold.pro"
 # include "getchar.pro"
@@ -181,9 +182,7 @@ void qsort(void *base, size_t elm_count, size_t elm_size, int (*cmp)(const void 
 # if defined(FEAT_PROFILE) || defined(FEAT_RELTIME)
 # include "profiler.pro"
 # endif
-# ifdef FEAT_QUICKFIX
-#  include "quickfix.pro"
-# endif
+# include "quickfix.pro"
 # include "regexp.pro"
 # include "scriptfile.pro"
 # include "screen.pro"

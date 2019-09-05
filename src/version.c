@@ -362,11 +362,7 @@ static char *(features[]) =
 #else
 	"-mksession",
 #endif
-#ifdef FEAT_MODIFY_FNAME
 	"+modify_fname",
-#else
-	"-modify_fname",
-#endif
 #ifdef FEAT_MOUSE
 	"+mouse",
 #  ifdef FEAT_MOUSESHAPE
@@ -761,6 +757,46 @@ static char *(features[]) =
 
 static int included_patches[] =
 {   /* Add new patch number below this line */
+/**/
+    1987,
+/**/
+    1986,
+/**/
+    1985,
+/**/
+    1984,
+/**/
+    1983,
+/**/
+    1982,
+/**/
+    1981,
+/**/
+    1980,
+/**/
+    1979,
+/**/
+    1978,
+/**/
+    1977,
+/**/
+    1976,
+/**/
+    1975,
+/**/
+    1974,
+/**/
+    1973,
+/**/
+    1972,
+/**/
+    1971,
+/**/
+    1970,
+/**/
+    1969,
+/**/
+    1968,
 /**/
     1967,
 /**/

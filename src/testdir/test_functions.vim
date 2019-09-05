@@ -253,7 +253,7 @@ func Test_resolve_unix()
   call delete('Xlink')
 
   silent !ln -s -f Xlink2/ Xlink1
-  call assert_equal('Xlink2', resolve('Xlink1'))
+  call assert_equal('Xlink2', 'Xlink1'->resolve())
   call assert_equal('Xlink2/', resolve('Xlink1/'))
   call delete('Xlink1')
 
@@ -400,10 +400,10 @@ endfunc
 func Test_pathshorten()
   call assert_equal('', pathshorten(''))
   call assert_equal('foo', pathshorten('foo'))
-  call assert_equal('/foo', pathshorten('/foo'))
+  call assert_equal('/foo', '/foo'->pathshorten())
   call assert_equal('f/', pathshorten('foo/'))
   call assert_equal('f/bar', pathshorten('foo/bar'))
-  call assert_equal('f/b/foobar', pathshorten('foo/bar/foobar'))
+  call assert_equal('f/b/foobar', 'foo/bar/foobar'->pathshorten())
   call assert_equal('/f/b/foobar', pathshorten('/foo/bar/foobar'))
   call assert_equal('.f/bar', pathshorten('.foo/bar'))
   call assert_equal('~f/bar', pathshorten('~foo/bar'))
@@ -847,21 +847,21 @@ Test
   call assert_equal(0, nextnonblank(-1))
   call assert_equal(0, nextnonblank(0))
   call assert_equal(1, nextnonblank(1))
-  call assert_equal(4, nextnonblank(2))
+  call assert_equal(4, 2->nextnonblank())
   call assert_equal(4, nextnonblank(3))
   call assert_equal(4, nextnonblank(4))
   call assert_equal(6, nextnonblank(5))
   call assert_equal(6, nextnonblank(6))
   call assert_equal(7, nextnonblank(7))
-  call assert_equal(0, nextnonblank(8))
+  call assert_equal(0, 8->nextnonblank())
 
   call assert_equal(0, prevnonblank(-1))
   call assert_equal(0, prevnonblank(0))
-  call assert_equal(1, prevnonblank(1))
+  call assert_equal(1, 1->prevnonblank())
   call assert_equal(1, prevnonblank(2))
   call assert_equal(1, prevnonblank(3))
   call assert_equal(4, prevnonblank(4))
-  call assert_equal(4, prevnonblank(5))
+  call assert_equal(4, 5->prevnonblank())
   call assert_equal(6, prevnonblank(6))
   call assert_equal(7, prevnonblank(7))
   call assert_equal(0, prevnonblank(8))
@@ -1220,7 +1220,7 @@ func Test_trim()
   call assert_equal("a", trim("a", ""))
   call assert_equal("", trim("", "a"))
 
-  let chars = join(map(range(1, 0x20) + [0xa0], {n -> nr2char(n)}), '')
+  let chars = join(map(range(1, 0x20) + [0xa0], {n -> n->nr2char()}), '')
   call assert_equal("x", trim(chars . "x" . chars))
 endfunc
 
@@ -1314,6 +1314,23 @@ func Test_inputsecret()
   unlet g:typed2
 endfunc
 
+func Test_getchar()
+  call feedkeys('a', '')
+  call assert_equal(char2nr('a'), getchar())
+
+  call test_setmouse(1, 3)
+  let v:mouse_win = 9
+  let v:mouse_winid = 9
+  let v:mouse_lnum = 9
+  let v:mouse_col = 9
+  call feedkeys("\<S-LeftMouse>", '')
+  call assert_equal("\<S-LeftMouse>", getchar())
+  call assert_equal(1, v:mouse_win)
+  call assert_equal(win_getid(1), v:mouse_winid)
+  call assert_equal(1, v:mouse_lnum)
+  call assert_equal(3, v:mouse_col)
+endfunc
+
 func Test_libcall_libcallnr()
   if !has('libcall')
     return
@@ -1396,7 +1413,7 @@ func Test_func_range_with_edit()
   " is invalid in that buffer.
   call writefile(['just one line'], 'Xfuncrange2')
   new
-  call setline(1, range(10))
+  call setline(1, 10->range())
   write Xfuncrange1
   call assert_fails('5,8call EditAnotherFile()', 'E16:')
 
@@ -1527,7 +1544,7 @@ func Test_readdir()
   call assert_equal(['bar.txt', 'dir', 'foo.txt'], sort(files))
 
   " Only results containing "f"
-  let files = readdir('Xdir', { x -> stridx(x, 'f') !=- 1 })
+  let files = 'Xdir'->readdir({ x -> stridx(x, 'f') !=- 1 })
   call assert_equal(['foo.txt'], sort(files))
 
   " Only .txt files
@@ -1542,6 +1559,10 @@ func Test_readdir()
   let l = []
   let files = readdir('Xdir', {x -> len(add(l, x)) == 2 ? -1 : 1})
   call assert_equal(1, len(files))
+
+  " Nested readdir() must not crash
+  let files = readdir('Xdir', 'readdir("Xdir", "1") != []')
+  call sort(files)->assert_equal(['bar.txt', 'dir', 'foo.txt'])
 
   eval 'Xdir'->delete('rf')
 endfunc
