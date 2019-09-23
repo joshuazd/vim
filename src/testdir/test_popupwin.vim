@@ -1137,7 +1137,7 @@ endfunc
 
 func Test_popup_beval()
   CheckScreendump
-  CheckFeature balloon_eval
+  CheckFeature balloon_eval_term
 
   let lines =<< trim END
 	call setline(1, range(1, 20))
@@ -1764,6 +1764,7 @@ func Test_popup_scrollbar()
 
   " remove the minwidth and maxheight
   call term_sendkeys(buf, ":call popup_setoptions(winid, #{maxheight: 0, minwidth: 0})\<CR>")
+  call term_sendkeys(buf, ":\<CR>")
   call VerifyScreenDump(buf, 'Test_popupwin_scroll_10', {})
 
   " clean up
