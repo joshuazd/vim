@@ -325,7 +325,7 @@ typedef unsigned short	short_u;
 typedef unsigned int	int_u;
 
 // Older systems do not have support for long long
-// use a typedef instead of hadcoded long long
+// use a typedef instead of hard-coded long long
 #ifdef HAVE_NO_LONG_LONG
  typedef long long_long_T;
  typedef long unsigned long_long_u_T;
@@ -632,6 +632,7 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define POPF_MAPPING	0x80	// mapping keys
 #define POPF_INFO	0x100	// used for info of popup menu
 #define POPF_INFO_MENU	0x200	// align info popup with popup menu
+#define POPF_POSINVERT	0x400	// vertical position can be inverted
 
 #ifdef FEAT_TEXT_PROP
 # define WIN_IS_POPUP(wp) ((wp)->w_popup_flags != 0)
@@ -1990,7 +1991,8 @@ typedef int sock_T;
 #define VV_EVENT	90
 #define VV_VERSIONLONG	91
 #define VV_ECHOSPACE	92
-#define VV_LEN		93	// number of v: vars
+#define VV_ARGV		93
+#define VV_LEN		94	// number of v: vars
 
 // used for v_number in VAR_SPECIAL
 #define VVAL_FALSE	0L

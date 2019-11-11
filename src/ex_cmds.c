@@ -3947,6 +3947,11 @@ do_sub(exarg_T *eap)
 		    VIM_CLEAR(sub_firstline);
 		}
 
+		// Match might be after the last line for "\n\zs" matching at
+		// the end of the last line.
+		if (lnum > curbuf->b_ml.ml_line_count)
+		    break;
+
 		if (sub_firstline == NULL)
 		{
 		    sub_firstline = vim_strsave(ml_get(sub_firstlnum));
@@ -4955,7 +4960,7 @@ prepare_tagpreview(
 	{
 	    wp = popup_find_preview_window();
 	    if (wp != NULL)
-		popup_set_wantpos_cursor(wp, wp->w_minwidth);
+		popup_set_wantpos_cursor(wp, wp->w_minwidth, NULL);
 	}
 	else if (use_popup != USEPOPUP_NONE)
 	{
@@ -4966,6 +4971,9 @@ prepare_tagpreview(
 		    popup_show(wp);
 		else
 		    popup_hide(wp);
+		// When the popup moves or resizes it may reveal part of
+		// another window.  TODO: can this be done more efficiently?
+		redraw_all_later(NOT_VALID);
 	    }
 	}
 	else
