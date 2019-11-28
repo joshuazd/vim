@@ -349,8 +349,6 @@ CSCOPE = yes
 
 !if "$(CSCOPE)" == "yes"
 # CSCOPE - Include support for Cscope
-CSCOPE_INCL  = if_cscope.h
-CSCOPE_OBJ   = $(OBJDIR)/if_cscope.obj
 CSCOPE_DEFS  = -DFEAT_CSCOPE
 !endif
 
@@ -365,15 +363,15 @@ TERMINAL = no
 !if "$(TERMINAL)" == "yes"
 TERM_OBJ = \
 	$(OBJDIR)/terminal.obj \
-	$(OBJDIR)/encoding.obj \
-	$(OBJDIR)/keyboard.obj \
-	$(OBJDIR)/mouse.obj \
-	$(OBJDIR)/parser.obj \
-	$(OBJDIR)/pen.obj \
-	$(OBJDIR)/termscreen.obj \
-	$(OBJDIR)/state.obj \
-	$(OBJDIR)/unicode.obj \
-	$(OBJDIR)/vterm.obj
+	$(OBJDIR)/vterm_encoding.obj \
+	$(OBJDIR)/vterm_keyboard.obj \
+	$(OBJDIR)/vterm_mouse.obj \
+	$(OBJDIR)/vterm_parser.obj \
+	$(OBJDIR)/vterm_pen.obj \
+	$(OBJDIR)/vterm_screen.obj \
+	$(OBJDIR)/vterm_state.obj \
+	$(OBJDIR)/vterm_unicode.obj \
+	$(OBJDIR)/vterm_vterm.obj
 TERM_DEFS = -DFEAT_TERMINAL
 TERM_DEPS = \
 	libvterm/include/vterm.h \
@@ -712,38 +710,52 @@ INCL =	vim.h alloc.h ascii.h ex_cmds.h feature.h globals.h \
 
 OBJ = \
 	$(OUTDIR)\arabic.obj \
+	$(OUTDIR)\arglist.obj \
 	$(OUTDIR)\autocmd.obj \
 	$(OUTDIR)\beval.obj \
 	$(OUTDIR)\blob.obj \
 	$(OUTDIR)\blowfish.obj \
 	$(OUTDIR)\buffer.obj \
+	$(OUTDIR)\bufwrite.obj \
 	$(OUTDIR)\change.obj \
 	$(OUTDIR)\charset.obj \
+	$(OUTDIR)\cindent.obj \
+	$(OUTDIR)\cmdexpand.obj \
+	$(OUTDIR)\cmdhist.obj \
 	$(OUTDIR)\crypt.obj \
 	$(OUTDIR)\crypt_zip.obj \
 	$(OUTDIR)\debugger.obj \
 	$(OUTDIR)\dict.obj \
 	$(OUTDIR)\diff.obj \
 	$(OUTDIR)\digraph.obj \
+	$(OUTDIR)\drawline.obj \
+	$(OUTDIR)\drawscreen.obj \
 	$(OUTDIR)\edit.obj \
 	$(OUTDIR)\eval.obj \
+	$(OUTDIR)\evalbuffer.obj \
 	$(OUTDIR)\evalfunc.obj \
+	$(OUTDIR)\evalvars.obj \
+	$(OUTDIR)\evalwindow.obj \
 	$(OUTDIR)\ex_cmds.obj \
 	$(OUTDIR)\ex_cmds2.obj \
 	$(OUTDIR)\ex_docmd.obj \
 	$(OUTDIR)\ex_eval.obj \
 	$(OUTDIR)\ex_getln.obj \
 	$(OUTDIR)\fileio.obj \
+	$(OUTDIR)\filepath.obj \
 	$(OUTDIR)\findfile.obj \
 	$(OUTDIR)\fold.obj \
 	$(OUTDIR)\getchar.obj \
 	$(OUTDIR)\hardcopy.obj \
 	$(OUTDIR)\hashtab.obj \
+	$(OUTDIR)\highlight.obj \
+	$(OBJDIR)\if_cscope.obj \
 	$(OUTDIR)\indent.obj \
 	$(OUTDIR)\insexpand.obj \
 	$(OUTDIR)\json.obj \
 	$(OUTDIR)\list.obj \
 	$(OUTDIR)\main.obj \
+	$(OUTDIR)\map.obj \
 	$(OUTDIR)\mark.obj \
 	$(OUTDIR)\mbyte.obj \
 	$(OUTDIR)\memfile.obj \
@@ -752,31 +764,40 @@ OBJ = \
 	$(OUTDIR)\message.obj \
 	$(OUTDIR)\misc1.obj \
 	$(OUTDIR)\misc2.obj \
+	$(OUTDIR)\mouse.obj \
 	$(OUTDIR)\move.obj \
 	$(OUTDIR)\normal.obj \
 	$(OUTDIR)\ops.obj \
 	$(OUTDIR)\option.obj \
+	$(OUTDIR)\optionstr.obj \
 	$(OUTDIR)\os_mswin.obj \
 	$(OUTDIR)\os_win32.obj \
 	$(OUTDIR)\pathdef.obj \
-	$(OUTDIR)\popupmnu.obj \
+	$(OUTDIR)\popupmenu.obj \
 	$(OUTDIR)\popupwin.obj \
+	$(OUTDIR)\profiler.obj \
 	$(OUTDIR)\quickfix.obj \
 	$(OUTDIR)\regexp.obj \
+	$(OUTDIR)\register.obj \
+	$(OUTDIR)\scriptfile.obj \
 	$(OUTDIR)\screen.obj \
 	$(OUTDIR)\search.obj \
+	$(OUTDIR)\session.obj \
 	$(OUTDIR)\sha256.obj \
 	$(OUTDIR)\sign.obj \
 	$(OUTDIR)\spell.obj \
 	$(OUTDIR)\spellfile.obj \
+	$(OUTDIR)\spellsuggest.obj \
 	$(OUTDIR)\syntax.obj \
 	$(OUTDIR)\tag.obj \
 	$(OUTDIR)\term.obj \
+	$(OUTDIR)\testing.obj \
 	$(OUTDIR)\textprop.obj \
 	$(OUTDIR)\ui.obj \
 	$(OUTDIR)\undo.obj \
 	$(OUTDIR)\usercmd.obj \
 	$(OUTDIR)\userfunc.obj \
+	$(OUTDIR)\viminfo.obj \
 	$(OUTDIR)\winclip.obj \
 	$(OUTDIR)\window.obj \
 
@@ -1258,25 +1279,41 @@ MAIN_TARGET = $(GVIM).exe $(VIM).exe $(VIMDLLBASE).dll
 MAIN_TARGET = $(VIM).exe
 !endif
 
+# Target to run individual tests.
+VIMTESTTARGET = $(VIM).exe
+
+OLD_TEST_OUTFILES = \
+	$(SCRIPTS_FIRST) \
+	$(SCRIPTS_ALL) \
+	$(SCRIPTS_MORE1) \
+	$(SCRIPTS_MORE4) \
+	$(SCRIPTS_WIN32) \
+	$(SCRIPTS_GUI)
+
 all:	$(MAIN_TARGET) \
 	vimrun.exe \
 	install.exe \
-	uninstal.exe \
+	uninstall.exe \
 	xxd/xxd.exe \
 	tee/tee.exe \
 	GvimExt/gvimext.dll
+
+# To get around the command line limit: Make use of nmake's response files to
+# capture the arguments for $(link) in a file  using the @<<ARGS<< syntax.
 
 !if "$(VIMDLL)" == "yes"
 
 $(VIMDLLBASE).dll: $(OUTDIR) $(OBJ) $(XDIFF_OBJ) $(GUI_OBJ) $(CUI_OBJ) $(OLE_OBJ) $(OLE_IDL) $(MZSCHEME_OBJ) \
 		$(LUA_OBJ) $(PERL_OBJ) $(PYTHON_OBJ) $(PYTHON3_OBJ) $(RUBY_OBJ) $(TCL_OBJ) \
-		$(CSCOPE_OBJ) $(TERM_OBJ) $(SOUND_OBJ) $(NETBEANS_OBJ) $(CHANNEL_OBJ) $(XPM_OBJ) \
+		$(TERM_OBJ) $(SOUND_OBJ) $(NETBEANS_OBJ) $(CHANNEL_OBJ) $(XPM_OBJ) \
 		version.c version.h
 	$(CC) $(CFLAGS_OUTDIR) version.c
-	$(link) $(LINKARGS1) /dll -out:$(VIMDLLBASE).dll $(OBJ) $(XDIFF_OBJ) $(GUI_OBJ) $(CUI_OBJ) $(OLE_OBJ) \
-		$(LUA_OBJ) $(MZSCHEME_OBJ) $(PERL_OBJ) $(PYTHON_OBJ) $(PYTHON3_OBJ) $(RUBY_OBJ) \
-		$(TCL_OBJ) $(CSCOPE_OBJ) $(TERM_OBJ) $(SOUND_OBJ) $(NETBEANS_OBJ) $(CHANNEL_OBJ) \
-		$(XPM_OBJ) $(OUTDIR)\version.obj $(LINKARGS2)
+	$(link) @<<
+$(LINKARGS1) /dll -out:$(VIMDLLBASE).dll $(OBJ) $(XDIFF_OBJ) $(GUI_OBJ) $(CUI_OBJ) $(OLE_OBJ)
+$(LUA_OBJ) $(MZSCHEME_OBJ) $(PERL_OBJ) $(PYTHON_OBJ) $(PYTHON3_OBJ) $(RUBY_OBJ)
+$(TCL_OBJ) $(TERM_OBJ) $(SOUND_OBJ) $(NETBEANS_OBJ) $(CHANNEL_OBJ)
+$(XPM_OBJ) $(OUTDIR)\version.obj $(LINKARGS2)
+<<
 
 $(GVIM).exe: $(OUTDIR) $(EXEOBJG) $(VIMDLLBASE).dll
 	$(link) $(LINKARGS1) /subsystem:$(SUBSYSTEM) -out:$(GVIM).exe $(EXEOBJG) $(VIMDLLBASE).lib $(LIBC)
@@ -1290,13 +1327,15 @@ $(VIM).exe: $(OUTDIR) $(EXEOBJC) $(VIMDLLBASE).dll
 
 $(VIM).exe: $(OUTDIR) $(OBJ) $(XDIFF_OBJ) $(GUI_OBJ) $(CUI_OBJ) $(OLE_OBJ) $(OLE_IDL) $(MZSCHEME_OBJ) \
 		$(LUA_OBJ) $(PERL_OBJ) $(PYTHON_OBJ) $(PYTHON3_OBJ) $(RUBY_OBJ) $(TCL_OBJ) \
-		$(CSCOPE_OBJ) $(TERM_OBJ) $(SOUND_OBJ) $(NETBEANS_OBJ) $(CHANNEL_OBJ) $(XPM_OBJ) \
+		$(TERM_OBJ) $(SOUND_OBJ) $(NETBEANS_OBJ) $(CHANNEL_OBJ) $(XPM_OBJ) \
 		version.c version.h
 	$(CC) $(CFLAGS_OUTDIR) version.c
-	$(link) $(LINKARGS1) /subsystem:$(SUBSYSTEM) -out:$(VIM).exe $(OBJ) $(XDIFF_OBJ) $(GUI_OBJ) $(CUI_OBJ) $(OLE_OBJ) \
-		$(LUA_OBJ) $(MZSCHEME_OBJ) $(PERL_OBJ) $(PYTHON_OBJ) $(PYTHON3_OBJ) $(RUBY_OBJ) \
-		$(TCL_OBJ) $(CSCOPE_OBJ) $(TERM_OBJ) $(SOUND_OBJ) $(NETBEANS_OBJ) $(CHANNEL_OBJ) \
-		$(XPM_OBJ) $(OUTDIR)\version.obj $(LINKARGS2)
+	$(link) @<<
+$(LINKARGS1) /subsystem:$(SUBSYSTEM) -out:$(VIM).exe $(OBJ) $(XDIFF_OBJ) $(GUI_OBJ) $(CUI_OBJ) $(OLE_OBJ)
+$(LUA_OBJ) $(MZSCHEME_OBJ) $(PERL_OBJ) $(PYTHON_OBJ) $(PYTHON3_OBJ) $(RUBY_OBJ)
+$(TCL_OBJ) $(TERM_OBJ) $(SOUND_OBJ) $(NETBEANS_OBJ) $(CHANNEL_OBJ)
+$(XPM_OBJ) $(OUTDIR)\version.obj $(LINKARGS2)
+<<
 	if exist $(VIM).exe.manifest mt.exe -nologo -manifest $(VIM).exe.manifest -updateresource:$(VIM).exe;1
 
 !endif
@@ -1313,8 +1352,8 @@ install.exe: dosinst.c
 	- if exist install.exe del install.exe
 	ren dosinst.exe install.exe
 
-uninstal.exe: uninstal.c
-	$(CC) /nologo -DNDEBUG -DWIN32 uninstal.c shell32.lib advapi32.lib \
+uninstall.exe: uninstall.c
+	$(CC) /nologo -DNDEBUG -DWIN32 uninstall.c shell32.lib advapi32.lib \
 		-link -subsystem:$(SUBSYSTEM_TOOLS)
 
 vimrun.exe: vimrun.c
@@ -1342,7 +1381,7 @@ tags: notags
 notags:
 	- if exist tags del tags
 
-clean:
+clean: testclean
 	- if exist $(OUTDIR)/nul $(DEL_TREE) $(OUTDIR)
 	- if exist *.obj del *.obj
 	- if exist $(VIM).exe del $(VIM).exe
@@ -1361,7 +1400,7 @@ clean:
 !endif
 	- if exist vimrun.exe del vimrun.exe
 	- if exist install.exe del install.exe
-	- if exist uninstal.exe del uninstal.exe
+	- if exist uninstall.exe del uninstall.exe
 	- if exist if_perl.c del if_perl.c
 	- if exist auto\if_perl.c del auto\if_perl.c
 	- if exist dimm.h del dimm.h
@@ -1377,7 +1416,6 @@ clean:
 	cd GvimExt
 	$(MAKE) /NOLOGO -f Makefile clean
 	cd ..
-	- if exist testdir\*.out del testdir\*.out
 
 test:
 	cd testdir
@@ -1394,13 +1432,24 @@ testclean:
 	$(MAKE) /NOLOGO -f Make_dos.mak clean
 	cd ..
 
+# Run individual OLD style test.
+# These do not depend on the executable, compile it when needed.
+$(OLD_TEST_OUTFILES:.out=):
+	cd testdir
+	- if exist $@.out del $@.out
+	$(MAKE) /NOLOGO -f Make_dos.mak VIMPROG=..\$(VIMTESTTARGET) nolog
+	$(MAKE) /NOLOGO -f Make_dos.mak VIMPROG=..\$(VIMTESTTARGET) $@.out
+	@ if exist test.log ( type test.log & exit /b 1 )
+	cd ..
+
+# Run individual NEW style test.
+# These do not depend on the executable, compile it when needed.
 $(NEW_TESTS):
 	cd testdir
 	- if exist $@.res del $@.res
-	$(MAKE) /NOLOGO -f Make_dos.mak nolog
-	$(MAKE) /NOLOGO -f Make_dos.mak $@.res
-	$(MAKE) /NOLOGO -f Make_dos.mak report
-	type messages
+	$(MAKE) /NOLOGO -f Make_dos.mak VIMPROG=..\$(VIMTESTTARGET) nolog
+	$(MAKE) /NOLOGO -f Make_dos.mak VIMPROG=..\$(VIMTESTTARGET) $@.res
+	$(MAKE) /NOLOGO -f Make_dos.mak VIMPROG=..\$(VIMTESTTARGET) report
 	cd ..
 
 ###########################################################################
@@ -1419,6 +1468,8 @@ $(NEW_TESTS):
 
 $(OUTDIR)/arabic.obj:	$(OUTDIR) arabic.c  $(INCL)
 
+$(OUTDIR)/arglist.obj:	$(OUTDIR) arglist.c  $(INCL)
+
 $(OUTDIR)/autocmd.obj:	$(OUTDIR) autocmd.c  $(INCL)
 
 $(OUTDIR)/beval.obj:	$(OUTDIR) beval.c  $(INCL)
@@ -1429,9 +1480,17 @@ $(OUTDIR)/blowfish.obj:	$(OUTDIR) blowfish.c  $(INCL)
 
 $(OUTDIR)/buffer.obj:	$(OUTDIR) buffer.c  $(INCL)
 
+$(OUTDIR)/bufwrite.obj:	$(OUTDIR) bufwrite.c  $(INCL)
+
 $(OUTDIR)/change.obj:	$(OUTDIR) change.c  $(INCL)
 
 $(OUTDIR)/charset.obj:	$(OUTDIR) charset.c  $(INCL)
+
+$(OUTDIR)/cindent.obj:	$(OUTDIR) cindent.c  $(INCL)
+
+$(OUTDIR)/cmdexpand.obj:	$(OUTDIR) cmdexpand.c  $(INCL)
+
+$(OUTDIR)/cmdhist.obj:	$(OUTDIR) cmdhist.c  $(INCL)
 
 $(OUTDIR)/crypt.obj:	$(OUTDIR) crypt.c  $(INCL)
 
@@ -1457,11 +1516,21 @@ $(OUTDIR)/xpatience.obj:	$(OUTDIR) xdiff/xpatience.c  $(XDIFF_DEPS)
 
 $(OUTDIR)/digraph.obj:	$(OUTDIR) digraph.c  $(INCL)
 
+$(OUTDIR)/drawline.obj:	$(OUTDIR) drawline.c  $(INCL)
+
+$(OUTDIR)/drawscreen.obj:	$(OUTDIR) drawscreen.c  $(INCL)
+
 $(OUTDIR)/edit.obj:	$(OUTDIR) edit.c  $(INCL)
 
 $(OUTDIR)/eval.obj:	$(OUTDIR) eval.c  $(INCL)
 
+$(OUTDIR)/evalbuffer.obj:	$(OUTDIR) evalbuffer.c  $(INCL)
+
 $(OUTDIR)/evalfunc.obj:	$(OUTDIR) evalfunc.c  $(INCL)
+
+$(OUTDIR)/evalvars.obj:	$(OUTDIR) evalvars.c  $(INCL)
+
+$(OUTDIR)/evalwindow.obj:	$(OUTDIR) evalwindow.c  $(INCL)
 
 $(OUTDIR)/ex_cmds.obj:	$(OUTDIR) ex_cmds.c  $(INCL)
 
@@ -1475,6 +1544,8 @@ $(OUTDIR)/ex_getln.obj:	$(OUTDIR) ex_getln.c  $(INCL)
 
 $(OUTDIR)/fileio.obj:	$(OUTDIR) fileio.c  $(INCL)
 
+$(OUTDIR)/filepath.obj:	$(OUTDIR) filepath.c  $(INCL)
+
 $(OUTDIR)/findfile.obj:	$(OUTDIR) findfile.c  $(INCL)
 
 $(OUTDIR)/fold.obj:	$(OUTDIR) fold.c  $(INCL)
@@ -1484,6 +1555,8 @@ $(OUTDIR)/getchar.obj:	$(OUTDIR) getchar.c  $(INCL)
 $(OUTDIR)/hardcopy.obj:	$(OUTDIR) hardcopy.c  $(INCL)
 
 $(OUTDIR)/hashtab.obj:	$(OUTDIR) hashtab.c  $(INCL)
+
+$(OUTDIR)/highlight.obj:	$(OUTDIR) highlight.c  $(INCL)
 
 $(OUTDIR)/indent.obj:	$(OUTDIR) indent.c  $(INCL)
 
@@ -1542,6 +1615,8 @@ $(OUTDIR)/list.obj:	$(OUTDIR) list.c  $(INCL)
 
 $(OUTDIR)/main.obj:	$(OUTDIR) main.c  $(INCL) $(CUI_INCL)
 
+$(OUTDIR)/map.obj:	$(OUTDIR) map.c  $(INCL)
+
 $(OUTDIR)/mark.obj:	$(OUTDIR) mark.c  $(INCL)
 
 $(OUTDIR)/memfile.obj:	$(OUTDIR) memfile.c  $(INCL)
@@ -1556,6 +1631,8 @@ $(OUTDIR)/misc1.obj:	$(OUTDIR) misc1.c  $(INCL)
 
 $(OUTDIR)/misc2.obj:	$(OUTDIR) misc2.c  $(INCL)
 
+$(OUTDIR)/mouse.obj:	$(OUTDIR) mouse.c  $(INCL)
+
 $(OUTDIR)/move.obj:	$(OUTDIR) move.c  $(INCL)
 
 $(OUTDIR)/mbyte.obj: $(OUTDIR) mbyte.c  $(INCL)
@@ -1566,7 +1643,9 @@ $(OUTDIR)/channel.obj: $(OUTDIR) channel.c $(INCL)
 
 $(OUTDIR)/normal.obj:	$(OUTDIR) normal.c  $(INCL)
 
-$(OUTDIR)/option.obj:	$(OUTDIR) option.c  $(INCL)
+$(OUTDIR)/option.obj:	$(OUTDIR) option.c  $(INCL) optiondefs.h
+
+$(OUTDIR)/optionstr.obj:	$(OUTDIR) optionstr.c  $(INCL)
 
 $(OUTDIR)/ops.obj:	$(OUTDIR) ops.c  $(INCL)
 
@@ -1591,17 +1670,25 @@ $(OUTDIR)/os_w32exeg.obj:	$(OUTDIR) os_w32exe.c  $(INCL)
 $(OUTDIR)/pathdef.obj:	$(OUTDIR) $(PATHDEF_SRC) $(INCL)
 	$(CC) $(CFLAGS_OUTDIR) $(PATHDEF_SRC)
 
-$(OUTDIR)/popupmnu.obj:	$(OUTDIR) popupmnu.c  $(INCL)
+$(OUTDIR)/popupmenu.obj:	$(OUTDIR) popupmenu.c  $(INCL)
 
 $(OUTDIR)/popupwin.obj:	$(OUTDIR) popupwin.c  $(INCL)
 
+$(OUTDIR)/profiler.obj:	$(OUTDIR) profiler.c  $(INCL)
+
 $(OUTDIR)/quickfix.obj:	$(OUTDIR) quickfix.c  $(INCL)
 
-$(OUTDIR)/regexp.obj:	$(OUTDIR) regexp.c regexp_nfa.c  $(INCL)
+$(OUTDIR)/regexp.obj:	$(OUTDIR) regexp.c regexp_bt.c regexp_nfa.c  $(INCL)
+
+$(OUTDIR)/register.obj:	$(OUTDIR) register.c $(INCL)
+
+$(OUTDIR)/scriptfile.obj:	$(OUTDIR) scriptfile.c  $(INCL)
 
 $(OUTDIR)/screen.obj:	$(OUTDIR) screen.c  $(INCL)
 
 $(OUTDIR)/search.obj:	$(OUTDIR) search.c  $(INCL)
+
+$(OUTDIR)/session.obj:	$(OUTDIR) session.c  $(INCL)
 
 $(OUTDIR)/sha256.obj:	$(OUTDIR) sha256.c  $(INCL)
 
@@ -1611,11 +1698,15 @@ $(OUTDIR)/spell.obj:	$(OUTDIR) spell.c  $(INCL)
 
 $(OUTDIR)/spellfile.obj:	$(OUTDIR) spellfile.c  $(INCL)
 
+$(OUTDIR)/spellsuggest.obj:	$(OUTDIR) spellsuggest.c  $(INCL)
+
 $(OUTDIR)/syntax.obj:	$(OUTDIR) syntax.c  $(INCL)
 
 $(OUTDIR)/tag.obj:	$(OUTDIR) tag.c  $(INCL)
 
 $(OUTDIR)/term.obj:	$(OUTDIR) term.c  $(INCL)
+
+$(OUTDIR)/term.obj:	$(OUTDIR) testing.c  $(INCL)
 
 $(OUTDIR)/textprop.obj:	$(OUTDIR) textprop.c  $(INCL)
 
@@ -1626,6 +1717,8 @@ $(OUTDIR)/undo.obj:	$(OUTDIR) undo.c  $(INCL)
 $(OUTDIR)/usercmd.obj:	$(OUTDIR) usercmd.c  $(INCL)
 
 $(OUTDIR)/userfunc.obj:	$(OUTDIR) userfunc.c  $(INCL)
+
+$(OUTDIR)/viminfo.obj:	$(OUTDIR) viminfo.c  $(INCL)
 
 $(OUTDIR)/window.obj:	$(OUTDIR) window.c  $(INCL)
 
@@ -1668,29 +1761,35 @@ CCCTERM = $(CC) $(CFLAGS) -Ilibvterm/include -DINLINE="" \
 	-DVSNPRINTF=vim_vsnprintf \
 	-DIS_COMBINING_FUNCTION=utf_iscomposing_uint \
 	-DWCWIDTH_FUNCTION=utf_uint2cells \
+	-DGET_SPECIAL_PTY_TYPE_FUNCTION=get_special_pty_type \
 	-D_CRT_SECURE_NO_WARNINGS
 
-# Create a default rule for libvterm.
-{libvterm/src/}.c{$(OUTDIR)/}.obj::
-	$(CCCTERM) -Fo$(OUTDIR)/ $<
+$(OUTDIR)/vterm_encoding.obj: $(OUTDIR) libvterm/src/encoding.c $(TERM_DEPS)
+	$(CCCTERM) /Fo$@ libvterm/src/encoding.c
 
-$(OUTDIR)/encoding.obj: $(OUTDIR) libvterm/src/encoding.c $(TERM_DEPS)
+$(OUTDIR)/vterm_keyboard.obj: $(OUTDIR) libvterm/src/keyboard.c $(TERM_DEPS)
+	$(CCCTERM) /Fo$@ libvterm/src/keyboard.c
 
-$(OUTDIR)/keyboard.obj: $(OUTDIR) libvterm/src/keyboard.c $(TERM_DEPS)
+$(OUTDIR)/vterm_mouse.obj: $(OUTDIR) libvterm/src/mouse.c $(TERM_DEPS)
+	$(CCCTERM) /Fo$@ libvterm/src/mouse.c
 
-$(OUTDIR)/mouse.obj: $(OUTDIR) libvterm/src/mouse.c $(TERM_DEPS)
+$(OUTDIR)/vterm_parser.obj: $(OUTDIR) libvterm/src/parser.c $(TERM_DEPS)
+	$(CCCTERM) /Fo$@ libvterm/src/parser.c
 
-$(OUTDIR)/parser.obj: $(OUTDIR) libvterm/src/parser.c $(TERM_DEPS)
+$(OUTDIR)/vterm_pen.obj: $(OUTDIR) libvterm/src/pen.c $(TERM_DEPS)
+	$(CCCTERM) /Fo$@ libvterm/src/pen.c
 
-$(OUTDIR)/pen.obj: $(OUTDIR) libvterm/src/pen.c $(TERM_DEPS)
+$(OUTDIR)/vterm_screen.obj: $(OUTDIR) libvterm/src/screen.c $(TERM_DEPS)
+	$(CCCTERM) /Fo$@ libvterm/src/screen.c
 
-$(OUTDIR)/termscreen.obj: $(OUTDIR) libvterm/src/termscreen.c $(TERM_DEPS)
+$(OUTDIR)/vterm_state.obj: $(OUTDIR) libvterm/src/state.c $(TERM_DEPS)
+	$(CCCTERM) /Fo$@ libvterm/src/state.c
 
-$(OUTDIR)/state.obj: $(OUTDIR) libvterm/src/state.c $(TERM_DEPS)
+$(OUTDIR)/vterm_unicode.obj: $(OUTDIR) libvterm/src/unicode.c $(TERM_DEPS)
+	$(CCCTERM) /Fo$@ libvterm/src/unicode.c
 
-$(OUTDIR)/unicode.obj: $(OUTDIR) libvterm/src/unicode.c $(TERM_DEPS)
-
-$(OUTDIR)/vterm.obj: $(OUTDIR) libvterm/src/vterm.c $(TERM_DEPS)
+$(OUTDIR)/vterm_vterm.obj: $(OUTDIR) libvterm/src/vterm.c $(TERM_DEPS)
+	$(CCCTERM) /Fo$@ libvterm/src/vterm.c
 
 
 # $CFLAGS may contain backslashes and double quotes, escape them both.
@@ -1716,36 +1815,49 @@ $(PATHDEF_SRC): Make_mvc.mak
 # End Custom Build
 proto.h: \
 	proto/arabic.pro \
+	proto/arglist.pro \
 	proto/autocmd.pro \
 	proto/blob.pro \
 	proto/blowfish.pro \
 	proto/buffer.pro \
+	proto/bufwrite.pro \
 	proto/change.pro \
 	proto/charset.pro \
+	proto/cindent.pro \
+	proto/cmdexpand.pro \
+	proto/cmdhist.pro \
 	proto/crypt.pro \
 	proto/crypt_zip.pro \
 	proto/debugger.pro \
 	proto/dict.pro \
 	proto/diff.pro \
 	proto/digraph.pro \
+	proto/drawline.pro \
+	proto/drawscreen.pro \
 	proto/edit.pro \
 	proto/eval.pro \
+	proto/evalbuffer.pro \
 	proto/evalfunc.pro \
+	proto/evalvars.pro \
+	proto/evalwindow.pro \
 	proto/ex_cmds.pro \
 	proto/ex_cmds2.pro \
 	proto/ex_docmd.pro \
 	proto/ex_eval.pro \
 	proto/ex_getln.pro \
 	proto/fileio.pro \
+	proto/filepath.pro \
 	proto/findfile.pro \
 	proto/getchar.pro \
 	proto/hardcopy.pro \
 	proto/hashtab.pro \
+	proto/highlight.pro \
 	proto/indent.pro \
 	proto/insexpand.pro \
 	proto/json.pro \
 	proto/list.pro \
 	proto/main.pro \
+	proto/map.pro \
 	proto/mark.pro \
 	proto/memfile.pro \
 	proto/memline.pro \
@@ -1753,32 +1865,41 @@ proto.h: \
 	proto/message.pro \
 	proto/misc1.pro \
 	proto/misc2.pro \
+	proto/mouse.pro \
 	proto/move.pro \
 	proto/mbyte.pro \
 	proto/normal.pro \
 	proto/ops.pro \
 	proto/option.pro \
+	proto/optionstr.pro \
 	proto/os_mswin.pro \
 	proto/winclip.pro \
 	proto/os_win32.pro \
-	proto/popupmnu.pro \
+	proto/popupmenu.pro \
 	proto/popupwin.pro \
+	proto/profiler.pro \
 	proto/quickfix.pro \
 	proto/regexp.pro \
+	proto/register.pro \
+	proto/scriptfile.pro \
 	proto/screen.pro \
 	proto/search.pro \
+	proto/session.pro \
 	proto/sha256.pro \
 	proto/sign.pro \
 	proto/spell.pro \
 	proto/spellfile.pro \
+	proto/spellsuggest.pro \
 	proto/syntax.pro \
 	proto/tag.pro \
 	proto/term.pro \
+	proto/testing.pro \
 	proto/textprop.pro \
 	proto/ui.pro \
 	proto/undo.pro \
 	proto/usercmd.pro \
 	proto/userfunc.pro \
+	proto/viminfo.pro \
 	proto/window.pro \
 	$(SOUND_PRO) \
 	$(NETBEANS_PRO) \

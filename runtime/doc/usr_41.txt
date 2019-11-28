@@ -1,4 +1,4 @@
-*usr_41.txt*	For Vim version 8.1.  Last change: 2019 Jul 04
+*usr_41.txt*	For Vim version 8.1.  Last change: 2019 Nov 17
 
 		     VIM USER MANUAL - by Bram Moolenaar
 
@@ -856,6 +856,7 @@ Insert mode completion:				*completion-functions*
 	complete_check()	check if completion should be aborted
 	complete_info()		get current completion information
 	pumvisible()		check if the popup menu is displayed
+	pum_getpos()		position and size of popup menu if visible
 
 Folding:					*folding-functions*
 	foldclosed()		check for a closed fold at a specific line
@@ -902,6 +903,7 @@ Interactive:					*interactive-functions*
 	confirm()		let the user make a choice
 	getchar()		get a character from the user
 	getcharmod()		get modifiers for the last typed character
+	getmousepos()		get last known mouse position
 	feedkeys()		put characters in the typeahead queue
 	input()			get a line from the user
 	inputlist()		let the user pick an entry from a list
@@ -1015,8 +1017,10 @@ Signs:						*sign-functions*
 	sign_getplaced()	get a list of placed signs
 	sign_jump()		jump to a sign
 	sign_place()		place a sign
+	sign_placelist()	place a list of signs
 	sign_undefine()		undefine a sign
 	sign_unplace()		unplace a sign
+	sign_unplacelist()	unplace a list of signs
 
 Terminal window:				*terminal-functions*
 	term_start()		open a terminal window and run a job

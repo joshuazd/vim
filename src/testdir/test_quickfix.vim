@@ -3,6 +3,8 @@
 source check.vim
 CheckFeature quickfix
 
+source screendump.vim
+
 set encoding=utf-8
 
 func s:setup_commands(cchar)
@@ -295,6 +297,18 @@ func Test_copenHeight()
   quit
 endfunc
 
+func Test_copenHeight_tabline()
+  set tabline=foo showtabline=2
+  copen
+  wincmd H
+  let height = winheight(0)
+  copen 10
+  call assert_equal(height, winheight(0))
+  quit
+  set tabline& showtabline&
+endfunc
+
+
 " Tests for the :cfile, :lfile, :caddfile, :laddfile, :cgetfile and :lgetfile
 " commands.
 func XfileTests(cchar)
@@ -517,7 +531,7 @@ func Test_nomem()
   call test_alloc_fail(GetAllocId('qf_dirname_start'), 0, 0)
   call assert_fails('vimgrep vim runtest.vim', 'E342:')
 
-  call test_alloc_fail(GetAllocId('qf_dirname_now'), 0, 0)
+  call GetAllocId('qf_dirname_now')->test_alloc_fail(0, 0)
   call assert_fails('vimgrep vim runtest.vim', 'E342:')
 
   call test_alloc_fail(GetAllocId('qf_namebuf'), 0, 0)
@@ -711,7 +725,7 @@ func Test_locationlist()
       " NOTE: problem 1:
       " intentionally not setting 'lnum' so that the quickfix entries are not
       " valid
-      call setloclist(0, qflist, ' ')
+      eval qflist->setloclist(0, ' ')
     endfor
 
     " Test A
@@ -1515,7 +1529,7 @@ endfunc
 
 func Test_setqflist_invalid_nr()
   " The following command used to crash Vim
-  call setqflist([], ' ', {'nr' : $XXX_DOES_NOT_EXIST})
+  eval []->setqflist(' ', {'nr' : $XXX_DOES_NOT_EXIST})
 endfunc
 
 func Test_quickfix_set_list_with_act()
@@ -1650,6 +1664,14 @@ func Test_switchbuf()
   call assert_equal(3, tabpagenr('$'))
   tabfirst | enew | tabonly | only
 
+  set switchbuf=uselast
+  split
+  let last_winid = win_getid()
+  copen
+  exe "normal 1G\<CR>"
+  call assert_equal(last_winid, win_getid())
+  enew | only
+
   set switchbuf=
   edit Xqftestfile1
   let file1_winid = win_getid()
@@ -1667,7 +1689,7 @@ func Test_switchbuf()
   call assert_equal(1, bufwinnr('Xqftestfile3'))
 
   " If only quickfix window is open in the current tabpage, jumping to an
-  " entry with 'switchubf' set to 'usetab' should search in other tabpages.
+  " entry with 'switchbuf' set to 'usetab' should search in other tabpages.
   enew | only
   set switchbuf=usetab
   tabedit Xqftestfile1
@@ -2428,6 +2450,30 @@ func Test_cwindow_jump()
   set efm&vim
 endfunc
 
+func Test_cwindow_highlight()
+  CheckScreendump
+
+  let lines =<< trim END
+	set t_u7=
+	call setline(1, ['some', 'text', 'with', 'matches'])
+	write XCwindow
+	vimgrep e XCwindow
+	redraw
+	cwindow 4
+  END
+  call writefile(lines, 'XtestCwindow')
+  let buf = RunVimInTerminal('-S XtestCwindow', #{rows: 12})
+  call VerifyScreenDump(buf, 'Test_quickfix_cwindow_1', {})
+
+  call term_sendkeys(buf, ":cnext\<CR>")
+  call VerifyScreenDump(buf, 'Test_quickfix_cwindow_2', {})
+
+  " clean up
+  call StopVimInTerminal(buf)
+  call delete('XtestCwindow')
+  call delete('XCwindow')
+endfunc
+
 func XvimgrepTests(cchar)
   call s:setup_commands(a:cchar)
 
@@ -2663,7 +2709,7 @@ func Test_file_from_copen()
   cclose
 
   augroup! QF_Test
-endfunction
+endfunc
 
 func Test_resize_from_copen()
     augroup QF_Test
@@ -4266,3 +4312,135 @@ func Test_quickfix_count()
     call assert_fails('$' .. cmd, 'E16:')
   endfor
 endfunc
+
+" Test for aborting quickfix commands using QuickFixCmdPre
+func Xtest_qfcmd_abort(cchar)
+  call s:setup_commands(a:cchar)
+
+  call g:Xsetlist([], 'f')
+
+  " cexpr/lexpr
+  let e = ''
+  try
+    Xexpr ["F1:10:Line10", "F2:20:Line20"]
+  catch /.*/
+    let e = v:exception
+  endtry
+  call assert_equal('AbortCmd', e)
+  call assert_equal(0, g:Xgetlist({'nr' : '$'}).nr)
+
+  " cfile/lfile
+  call writefile(["F1:10:Line10", "F2:20:Line20"], 'Xfile1')
+  let e = ''
+  try
+    Xfile Xfile1
+  catch /.*/
+    let e = v:exception
+  endtry
+  call assert_equal('AbortCmd', e)
+  call assert_equal(0, g:Xgetlist({'nr' : '$'}).nr)
+  call delete('Xfile1')
+
+  " cgetbuffer/lgetbuffer
+  enew!
+  call append(0, ["F1:10:Line10", "F2:20:Line20"])
+  let e = ''
+  try
+    Xgetbuffer
+  catch /.*/
+    let e = v:exception
+  endtry
+  call assert_equal('AbortCmd', e)
+  call assert_equal(0, g:Xgetlist({'nr' : '$'}).nr)
+  enew!
+
+  " vimgrep/lvimgrep
+  let e = ''
+  try
+    Xvimgrep /func/ test_quickfix.vim
+  catch /.*/
+    let e = v:exception
+  endtry
+  call assert_equal('AbortCmd', e)
+  call assert_equal(0, g:Xgetlist({'nr' : '$'}).nr)
+
+  " helpgrep/lhelpgrep
+  let e = ''
+  try
+    Xhelpgrep quickfix
+  catch /.*/
+    let e = v:exception
+  endtry
+  call assert_equal('AbortCmd', e)
+  call assert_equal(0, g:Xgetlist({'nr' : '$'}).nr)
+
+  " grep/lgrep
+  if has('unix')
+    let e = ''
+    try
+      silent Xgrep func test_quickfix.vim
+    catch /.*/
+      let e = v:exception
+    endtry
+    call assert_equal('AbortCmd', e)
+    call assert_equal(0, g:Xgetlist({'nr' : '$'}).nr)
+  endif
+endfunc
+
+func Test_qfcmd_abort()
+  augroup QF_Test
+    au!
+    autocmd  QuickFixCmdPre * throw "AbortCmd"
+  augroup END
+
+  call Xtest_qfcmd_abort('c')
+  call Xtest_qfcmd_abort('l')
+
+  augroup QF_Test
+    au!
+  augroup END
+endfunc
+
+" Test for using a file in one of the parent directories.
+func Test_search_in_dirstack()
+  call mkdir('Xtestdir/a/b/c', 'p')
+  let save_cwd = getcwd()
+  call writefile(["X1_L1", "X1_L2"], 'Xtestdir/Xfile1')
+  call writefile(["X2_L1", "X2_L2"], 'Xtestdir/a/Xfile2')
+  call writefile(["X3_L1", "X3_L2"], 'Xtestdir/a/b/Xfile3')
+  call writefile(["X4_L1", "X4_L2"], 'Xtestdir/a/b/c/Xfile4')
+
+  let lines = "Entering dir Xtestdir\n" .
+	      \ "Entering dir a\n" .
+	      \ "Entering dir b\n" .
+	      \ "Xfile2:2:X2_L2\n" .
+	      \ "Leaving dir a\n" .
+	      \ "Xfile1:2:X1_L2\n" .
+	      \ "Xfile3:1:X3_L1\n" .
+	      \ "Entering dir c\n" .
+	      \ "Xfile4:2:X4_L2\n" .
+	      \ "Leaving dir c\n" .
+	      \ "Leaving dir Xtestdir\n"
+  set efm=%DEntering\ dir\ %f,%XLeaving\ dir\ %f,%f:%l:%m
+  cexpr lines
+  call assert_equal(11, getqflist({'size' : 0}).size)
+  call assert_equal(4, getqflist({'idx' : 0}).idx)
+  call assert_equal('X2_L2', getline('.'))
+  cnext
+  call assert_equal(6, getqflist({'idx' : 0}).idx)
+  call assert_equal('X1_L2', getline('.'))
+  cnext
+  call assert_equal(7, getqflist({'idx' : 0}).idx)
+  call assert_equal(1, line('$'))
+  call assert_equal('', getline(1))
+  cnext
+  call assert_equal(9, getqflist({'idx' : 0}).idx)
+  call assert_equal(1, line('$'))
+  call assert_equal('', getline(1))
+
+  set efm&
+  exe 'cd ' . save_cwd
+  call delete('Xtestdir', 'rf')
+endfunc
+
+" vim: shiftwidth=2 sts=2 expandtab

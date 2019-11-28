@@ -1,23 +1,18 @@
 " Tests for 'balloonevalterm'.
 " A few tests only work in the terminal.
 
-if has('gui_running')
-  throw 'Skipped: only work in the terminal'
-endif
-
 source check.vim
+CheckNotGui
 CheckFeature balloon_eval_term
 
 source screendump.vim
-if !CanRunVimInTerminal()
-  throw 'Skipped: cannot make screendumps'
-endif
+CheckScreendump
 
 let s:common_script =<< trim [CODE]
   call setline(1, ["one one one", "two tXo two", "three three three"])
   set balloonevalterm balloonexpr=MyBalloonExpr() balloondelay=100
   func MyBalloonExpr()
-    return "line " .. v:beval_lnum .. " column " .. v:beval_col .. ": " .. v:beval_text
+    return "line " .. v:beval_lnum .. " column " .. v:beval_col .. ":\n" .. v:beval_text
   endfun
   redraw
 [CODE]

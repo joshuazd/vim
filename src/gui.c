@@ -17,10 +17,13 @@ gui_T gui;
 static void set_guifontwide(char_u *font_name);
 #endif
 static void gui_check_pos(void);
+static void gui_reset_scroll_region(void);
 static void gui_outstr(char_u *, int);
 static int gui_screenchar(int off, int flags, guicolor_T fg, guicolor_T bg, int back);
+static int gui_outstr_nowrap(char_u *s, int len, int flags, guicolor_T fg, guicolor_T bg, int back);
 static void gui_delete_lines(int row, int count);
 static void gui_insert_lines(int row, int count);
+static int gui_xy2colrow(int x, int y, int *colp);
 #if defined(FEAT_GUI_TABLINE) || defined(PROTO)
 static int gui_has_tabline(void);
 #endif
@@ -28,7 +31,7 @@ static void gui_do_scrollbar(win_T *wp, int which, int enable);
 static void gui_update_horiz_scrollbar(int);
 static void gui_set_fg_color(char_u *name);
 static void gui_set_bg_color(char_u *name);
-static win_T *xy2win(int x, int y);
+static win_T *xy2win(int x, int y, mouse_find_T popup);
 
 #ifdef GUI_MAY_FORK
 static void gui_do_fork(void);
@@ -276,7 +279,7 @@ gui_do_fork(void)
 	}
 
 	if (pipe_error)
-	    ui_delay(300L, TRUE);
+	    ui_delay(301L, TRUE);
 
 	/* When swapping screens we may need to go to the next line, e.g.,
 	 * after a hit-enter prompt and using ":gui". */
@@ -1050,7 +1053,7 @@ gui_get_wide_font(void)
     return OK;
 }
 
-    void
+    static void
 gui_set_cursor(int row, int col)
 {
     gui.row = row;
@@ -1713,7 +1716,7 @@ gui_new_shellsize(void)
 /*
  * Make scroll region cover whole screen.
  */
-    void
+    static void
 gui_reset_scroll_region(void)
 {
     gui.scroll_region_top = 0;
@@ -1722,7 +1725,7 @@ gui_reset_scroll_region(void)
     gui.scroll_region_right = gui.num_cols - 1;
 }
 
-    void
+    static void
 gui_start_highlight(int mask)
 {
     if (mask > HL_ALL)		    /* highlight code */
@@ -2227,7 +2230,7 @@ gui_screenstr(
  * Returns OK, unless "back" is non-zero and using the bold trick, then return
  * FAIL (the caller should start drawing "back" chars back).
  */
-    int
+    static int
 gui_outstr_nowrap(
     char_u	*s,
     int		len,
@@ -2253,7 +2256,7 @@ gui_outstr_nowrap(
     int		col = gui.col;
 #ifdef FEAT_SIGN_ICONS
     int		draw_sign = FALSE;
-    int		signcol = col;
+    int		signcol = 0;
     char_u	extra[18];
 # ifdef FEAT_NETBEANS_INTG
     int		multi_sign = FALSE;
@@ -2270,7 +2273,7 @@ gui_outstr_nowrap(
 # ifdef FEAT_NETBEANS_INTG
 	  || *s == MULTISIGN_BYTE
 # endif
-    )
+       )
     {
 # ifdef FEAT_NETBEANS_INTG
 	if (*s == MULTISIGN_BYTE)
@@ -2289,7 +2292,10 @@ gui_outstr_nowrap(
 	    --col;
 	len = (int)STRLEN(s);
 	if (len > 2)
-	    signcol = col + len - 3;	// Right align sign icon in the number column
+	    // right align sign icon in the number column
+	    signcol = col + len - 3;
+	else
+	    signcol = col;
 	draw_sign = TRUE;
 	highlight_mask = 0;
     }
@@ -3377,7 +3383,7 @@ button_set:
  * Corrects for multi-byte character.
  * returns column in "*colp" and row as return value;
  */
-    int
+    static int
 gui_xy2colrow(int x, int y, int *colp)
 {
     int		col = check_col(X_2_COL(x));
@@ -3419,6 +3425,10 @@ static int	prev_which_scrollbars[3];
     void
 gui_init_which_components(char_u *oldval UNUSED)
 {
+#ifdef FEAT_GUI_DARKTHEME
+    static int	prev_dark_theme = -1;
+    int		using_dark_theme = FALSE;
+#endif
 #ifdef FEAT_MENU
     static int	prev_menu_is_active = -1;
 #endif
@@ -3489,6 +3499,11 @@ gui_init_which_components(char_u *oldval UNUSED)
 	    case GO_BOT:
 		gui.which_scrollbars[SBAR_BOTTOM] = TRUE;
 		break;
+#ifdef FEAT_GUI_DARKTHEME
+	    case GO_DARKTHEME:
+		using_dark_theme = TRUE;
+		break;
+#endif
 #ifdef FEAT_MENU
 	    case GO_MENUS:
 		gui.menu_is_active = TRUE;
@@ -3521,6 +3536,14 @@ gui_init_which_components(char_u *oldval UNUSED)
     {
 	need_set_size = 0;
 	fix_size = FALSE;
+
+#ifdef FEAT_GUI_DARKTHEME
+	if (using_dark_theme != prev_dark_theme)
+	{
+	    gui_mch_set_dark_theme(using_dark_theme);
+	    prev_dark_theme = using_dark_theme;
+	}
+#endif
 
 #ifdef FEAT_GUI_TABLINE
 	/* Update the GUI tab line, it may appear or disappear.  This may
@@ -4013,12 +4036,10 @@ gui_drag_scrollbar(scrollbar_T *sb, long value, int still_dragging)
     if (dont_scroll)
 	return;
 #endif
-#ifdef FEAT_INS_EXPAND
     /* Disallow scrolling the current window when the completion popup menu is
      * visible. */
     if ((sb->wp == NULL || sb->wp == curwin) && pum_visible())
 	return;
-#endif
 
 #ifdef FEAT_RIGHTLEFT
     if (sb->wp == NULL && curwin->w_p_rl)
@@ -4479,13 +4500,12 @@ gui_do_scroll(void)
     {
 	int type = VALID;
 
-#ifdef FEAT_INS_EXPAND
 	if (pum_visible())
 	{
 	    type = NOT_VALID;
 	    wp->w_lines_valid = 0;
 	}
-#endif
+
 	/* Don't set must_redraw here, it may cause the popup menu to
 	 * disappear when losing focus after a scrollbar drag. */
 	if (wp->w_redr_type < type)
@@ -4495,11 +4515,9 @@ gui_do_scroll(void)
 	mch_enable_flush();
     }
 
-#ifdef FEAT_INS_EXPAND
     /* May need to redraw the popup menu. */
     if (pum_visible())
 	pum_redraw();
-#endif
 
     return (wp == curwin && !EQUAL_POS(curwin->w_cursor, old_cursor));
 }
@@ -4834,7 +4852,7 @@ gui_mouse_focus(int x, int y)
 
 #ifdef FEAT_MOUSESHAPE
     /* Get window pointer, and update mouse shape as well. */
-    wp = xy2win(x, y);
+    wp = xy2win(x, y, IGNORE_POPUP);
 #endif
 
     /* Only handle this when 'mousefocus' set and ... */
@@ -4850,7 +4868,7 @@ gui_mouse_focus(int x, int y)
 	if (x < 0 || x > Columns * gui.char_width)
 	    return;
 #ifndef FEAT_MOUSESHAPE
-	wp = xy2win(x, y);
+	wp = xy2win(x, y, IGNORE_POPUP);
 #endif
 	if (wp == curwin || wp == NULL)
 	    return;	/* still in the same old window, or none at all */
@@ -4912,25 +4930,36 @@ gui_mouse_moved(int x, int y)
 }
 
 /*
+ * Get the window where the mouse pointer is on.
+ * Returns NULL if not found.
+ */
+    win_T *
+gui_mouse_window(mouse_find_T popup)
+{
+    int		x, y;
+
+    if (!(gui.in_use && (p_mousef || popup == FIND_POPUP)))
+	return NULL;
+    gui_mch_getmouse(&x, &y);
+
+    // Only use the mouse when it's on the Vim window
+    if (x >= 0 && x <= Columns * gui.char_width
+	    && y >= 0 && Y_2_ROW(y) >= tabline_height())
+	return xy2win(x, y, popup);
+    return NULL;
+}
+
+/*
  * Called when mouse should be moved to window with focus.
  */
     void
 gui_mouse_correct(void)
 {
-    int		x, y;
     win_T	*wp = NULL;
 
     need_mouse_correct = FALSE;
 
-    if (!(gui.in_use && p_mousef))
-	return;
-
-    gui_mch_getmouse(&x, &y);
-    /* Don't move the mouse when it's left or right of the Vim window */
-    if (x < 0 || x > Columns * gui.char_width)
-	return;
-    if (y >= 0 && Y_2_ROW(y) >= tabline_height())
-	wp = xy2win(x, y);
+    wp = gui_mouse_window(IGNORE_POPUP);
     if (wp != curwin && wp != NULL)	/* If in other than current window */
     {
 	validate_cline_row();
@@ -4945,7 +4974,7 @@ gui_mouse_correct(void)
  * As a side effect update the shape of the mouse pointer.
  */
     static win_T *
-xy2win(int x, int y)
+xy2win(int x, int y, mouse_find_T popup)
 {
     int		row;
     int		col;
@@ -4955,7 +4984,7 @@ xy2win(int x, int y)
     col = X_2_COL(x);
     if (row < 0 || col < 0)		/* before first window */
 	return NULL;
-    wp = mouse_find_win(&row, &col, FALSE);
+    wp = mouse_find_win(&row, &col, popup);
     if (wp == NULL)
 	return NULL;
 #ifdef FEAT_MOUSESHAPE
@@ -5365,7 +5394,7 @@ gui_do_findrepl(
 	i = msg_scroll;
 	if (down)
 	{
-	    (void)do_search(NULL, '/', ga.ga_data, 1L, searchflags, NULL, NULL);
+	    (void)do_search(NULL, '/', ga.ga_data, 1L, searchflags, NULL);
 	}
 	else
 	{
@@ -5373,7 +5402,7 @@ gui_do_findrepl(
 	     * direction */
 	    p = vim_strsave_escaped(ga.ga_data, (char_u *)"?");
 	    if (p != NULL)
-	        (void)do_search(NULL, '?', p, 1L, searchflags, NULL, NULL);
+	        (void)do_search(NULL, '?', p, 1L, searchflags, NULL);
 	    vim_free(p);
 	}
 

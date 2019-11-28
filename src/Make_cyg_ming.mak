@@ -703,38 +703,52 @@ GUIOBJ =  $(OUTDIR)/gui.o $(OUTDIR)/gui_w32.o $(OUTDIR)/gui_beval.o
 CUIOBJ = $(OUTDIR)/iscygpty.o
 OBJ = \
 	$(OUTDIR)/arabic.o \
+	$(OUTDIR)/arglist.o \
 	$(OUTDIR)/autocmd.o \
 	$(OUTDIR)/beval.o \
 	$(OUTDIR)/blob.o \
 	$(OUTDIR)/blowfish.o \
 	$(OUTDIR)/buffer.o \
+	$(OUTDIR)/bufwrite.o \
 	$(OUTDIR)/change.o \
 	$(OUTDIR)/charset.o \
+	$(OUTDIR)/cindent.o \
+	$(OUTDIR)/cmdexpand.o \
+	$(OUTDIR)/cmdhist.o \
 	$(OUTDIR)/crypt.o \
 	$(OUTDIR)/crypt_zip.o \
 	$(OUTDIR)/debugger.o \
 	$(OUTDIR)/dict.o \
 	$(OUTDIR)/diff.o \
 	$(OUTDIR)/digraph.o \
+	$(OUTDIR)/drawline.o \
+	$(OUTDIR)/drawscreen.o \
 	$(OUTDIR)/edit.o \
 	$(OUTDIR)/eval.o \
+	$(OUTDIR)/evalbuffer.o \
 	$(OUTDIR)/evalfunc.o \
+	$(OUTDIR)/evalvars.o \
+	$(OUTDIR)/evalwindow.o \
 	$(OUTDIR)/ex_cmds.o \
 	$(OUTDIR)/ex_cmds2.o \
 	$(OUTDIR)/ex_docmd.o \
 	$(OUTDIR)/ex_eval.o \
 	$(OUTDIR)/ex_getln.o \
 	$(OUTDIR)/fileio.o \
+	$(OUTDIR)/filepath.o \
 	$(OUTDIR)/findfile.o \
 	$(OUTDIR)/fold.o \
 	$(OUTDIR)/getchar.o \
 	$(OUTDIR)/hardcopy.o \
 	$(OUTDIR)/hashtab.o \
+	$(OUTDIR)/highlight.o \
+	$(OUTDIR)/if_cscope.o \
 	$(OUTDIR)/indent.o \
 	$(OUTDIR)/insexpand.o \
 	$(OUTDIR)/json.o \
 	$(OUTDIR)/list.o \
 	$(OUTDIR)/main.o \
+	$(OUTDIR)/map.o \
 	$(OUTDIR)/mark.o \
 	$(OUTDIR)/memfile.o \
 	$(OUTDIR)/memline.o \
@@ -742,33 +756,42 @@ OBJ = \
 	$(OUTDIR)/message.o \
 	$(OUTDIR)/misc1.o \
 	$(OUTDIR)/misc2.o \
+	$(OUTDIR)/mouse.o \
 	$(OUTDIR)/move.o \
 	$(OUTDIR)/mbyte.o \
 	$(OUTDIR)/normal.o \
 	$(OUTDIR)/ops.o \
 	$(OUTDIR)/option.o \
+	$(OUTDIR)/optionstr.o \
 	$(OUTDIR)/os_mswin.o \
 	$(OUTDIR)/os_win32.o \
 	$(OUTDIR)/pathdef.o \
-	$(OUTDIR)/popupmnu.o \
+	$(OUTDIR)/popupmenu.o \
 	$(OUTDIR)/popupwin.o \
+	$(OUTDIR)/profiler.o \
 	$(OUTDIR)/quickfix.o \
 	$(OUTDIR)/regexp.o \
+	$(OUTDIR)/register.o \
+	$(OUTDIR)/scriptfile.o \
 	$(OUTDIR)/screen.o \
 	$(OUTDIR)/search.o \
+	$(OUTDIR)/session.o \
 	$(OUTDIR)/sha256.o \
 	$(OUTDIR)/sign.o \
 	$(OUTDIR)/spell.o \
 	$(OUTDIR)/spellfile.o \
+	$(OUTDIR)/spellsuggest.o \
 	$(OUTDIR)/syntax.o \
 	$(OUTDIR)/tag.o \
 	$(OUTDIR)/term.o \
+	$(OUTDIR)/testing.o \
 	$(OUTDIR)/textprop.o \
 	$(OUTDIR)/ui.o \
 	$(OUTDIR)/undo.o \
 	$(OUTDIR)/usercmd.o \
 	$(OUTDIR)/userfunc.o \
 	$(OUTDIR)/version.o \
+	$(OUTDIR)/viminfo.o \
 	$(OUTDIR)/winclip.o \
 	$(OUTDIR)/window.o
 
@@ -809,9 +832,6 @@ endif
 ifdef TCL
 OBJ += $(OUTDIR)/if_tcl.o
 endif
-ifeq ($(CSCOPE),yes)
-OBJ += $(OUTDIR)/if_cscope.o
-endif
 
 ifeq ($(NETBEANS),yes)
  ifneq ($(CHANNEL),yes)
@@ -849,15 +869,15 @@ endif
 
 ifeq ($(TERMINAL),yes)
 OBJ += $(OUTDIR)/terminal.o \
-	$(OUTDIR)/encoding.o \
-	$(OUTDIR)/keyboard.o \
-	$(OUTDIR)/mouse.o \
-	$(OUTDIR)/parser.o \
-	$(OUTDIR)/pen.o \
-	$(OUTDIR)/termscreen.o \
-	$(OUTDIR)/state.o \
-	$(OUTDIR)/unicode.o \
-	$(OUTDIR)/vterm.o
+	$(OUTDIR)/vterm_encoding.o \
+	$(OUTDIR)/vterm_keyboard.o \
+	$(OUTDIR)/vterm_mouse.o \
+	$(OUTDIR)/vterm_parser.o \
+	$(OUTDIR)/vterm_pen.o \
+	$(OUTDIR)/vterm_screen.o \
+	$(OUTDIR)/vterm_state.o \
+	$(OUTDIR)/vterm_unicode.o \
+	$(OUTDIR)/vterm_vterm.o
 endif
 
 ifeq ($(SOUND),yes)
@@ -997,7 +1017,7 @@ ifeq (yes, $(MAP))
 LFLAGS += -Wl,-Map=$(TARGET).map
 endif
 
-all: $(MAIN_TARGET) vimrun.exe xxd/xxd.exe tee/tee.exe install.exe uninstal.exe GvimExt/gvimext.dll
+all: $(MAIN_TARGET) vimrun.exe xxd/xxd.exe tee/tee.exe install.exe uninstall.exe GvimExt/gvimext.dll
 
 vimrun.exe: vimrun.c
 	$(CC) $(CFLAGS) -o vimrun.exe vimrun.c $(LIB)
@@ -1005,8 +1025,8 @@ vimrun.exe: vimrun.c
 install.exe: dosinst.c
 	$(CC) $(CFLAGS) -o install.exe dosinst.c $(LIB) -lole32 -luuid
 
-uninstal.exe: uninstal.c
-	$(CC) $(CFLAGS) -o uninstal.exe uninstal.c $(LIB)
+uninstall.exe: uninstall.c
+	$(CC) $(CFLAGS) -o uninstall.exe uninstall.c $(LIB) -lole32
 
 ifeq ($(VIMDLL),yes)
 $(TARGET): $(OUTDIR) $(OBJ)
@@ -1050,7 +1070,7 @@ clean:
 	-$(DEL) $(OUTDIR)$(DIRSLASH)*.res
 	-$(DEL) $(OUTDIR)$(DIRSLASH)pathdef.c
 	-rmdir $(OUTDIR)
-	-$(DEL) $(MAIN_TARGET) vimrun.exe install.exe uninstal.exe
+	-$(DEL) $(MAIN_TARGET) vimrun.exe install.exe uninstall.exe
 ifdef PERL
 	-$(DEL) if_perl.c
 	-$(DEL) auto$(DIRSLASH)if_perl.c
@@ -1167,8 +1187,11 @@ $(OUTDIR)/os_w32exeg.o:	os_w32exe.c $(INCL)
 $(OUTDIR)/os_win32.o:	os_win32.c $(INCL) $(MZSCHEME_INCL)
 	$(CC) -c $(CFLAGS) os_win32.c -o $@
 
-$(OUTDIR)/regexp.o:	regexp.c regexp_nfa.c $(INCL)
+$(OUTDIR)/regexp.o:	regexp.c regexp_bt.c regexp_nfa.c $(INCL)
 	$(CC) -c $(CFLAGS) regexp.c -o $@
+
+$(OUTDIR)/register.o:	register.c $(INCL)
+	$(CC) -c $(CFLAGS) register.c -o $@
 
 $(OUTDIR)/terminal.o:	terminal.c $(INCL) $(TERM_DEPS)
 	$(CC) -c $(CFLAGS) terminal.c -o $@
@@ -1180,9 +1203,10 @@ $(OUTDIR)/pathdef.o:	$(PATHDEF_SRC) $(INCL)
 CCCTERM = $(CC) -c $(CFLAGS) -Ilibvterm/include -DINLINE="" \
 	  -DVSNPRINTF=vim_vsnprintf \
 	  -DIS_COMBINING_FUNCTION=utf_iscomposing_uint \
-	  -DWCWIDTH_FUNCTION=utf_uint2cells
+	  -DWCWIDTH_FUNCTION=utf_uint2cells \
+	  -DGET_SPECIAL_PTY_TYPE_FUNCTION=get_special_pty_type
 
-$(OUTDIR)/%.o : libvterm/src/%.c $(TERM_DEPS)
+$(OUTDIR)/vterm_%.o : libvterm/src/%.c $(TERM_DEPS)
 	$(CCCTERM) $< -o $@
 
 

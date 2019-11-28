@@ -12,13 +12,12 @@
  *
  * TODO:
  * - Adjust text property column and length when text is inserted/deleted.
- *   -> :substitute with multiple matches, issue #4427
  *   -> a :substitute with a multi-line match
  *   -> search for changed_bytes() from misc1.c
  *   -> search for mark_col_adjust()
  * - Perhaps we only need TP_FLAG_CONT_NEXT and can drop TP_FLAG_CONT_PREV?
- * - Add an arrray for global_proptypes, to quickly lookup a prop type by ID
- * - Add an arrray for b_proptypes, to quickly lookup a prop type by ID
+ * - Add an array for global_proptypes, to quickly lookup a prop type by ID
+ * - Add an array for b_proptypes, to quickly lookup a prop type by ID
  * - Checking the text length to detect text properties is slow.  Use a flag in
  *   the index, like DB_MARKED?
  * - Also test line2byte() with many lines, so that ml_updatechunk() is taken
@@ -91,6 +90,20 @@ find_prop(char_u *name, buf_T *buf)
 }
 
 /*
+ * Get the prop type ID of "name".
+ * When not found return zero.
+ */
+    int
+find_prop_type_id(char_u *name, buf_T *buf)
+{
+    proptype_T *pt = find_prop(name, buf);
+
+    if (pt == NULL)
+	return 0;
+    return pt->pt_id;
+}
+
+/*
  * Lookup a property type by name.  First in "buf" and when not found in the
  * global types.
  * When not found gives an error message and returns NULL.
@@ -112,7 +125,7 @@ lookup_prop_type(char_u *name, buf_T *buf)
  * When the argument is not used or "bufnr" is not present then "buf" is
  * unchanged.
  * If "bufnr" is valid or not present return OK.
- * When "arg" is not a dict or "bufnr" is invalide return FAIL.
+ * When "arg" is not a dict or "bufnr" is invalid return FAIL.
  */
     static int
 get_bufnr_from_arg(typval_T *arg, buf_T **buf)
@@ -256,7 +269,10 @@ prop_add_common(
     }
 
     if (buf->b_ml.ml_mfp == NULL)
-	ml_open(buf);
+    {
+	emsg(_("E275: Cannot add text property to unloaded buffer"));
+	return;
+    }
 
     for (lnum = start_lnum; lnum <= end_lnum; ++lnum)
     {
@@ -362,6 +378,39 @@ get_text_props(buf_T *buf, linenr_T lnum, char_u **props, int will_change)
     if (proplen > 0)
 	*props = text + textlen;
     return (int)(proplen / sizeof(textprop_T));
+}
+
+/*
+ * Find text property "type_id" in the visible lines of window "wp".
+ * Match "id" when it is > 0.
+ * Returns FAIL when not found.
+ */
+    int
+find_visible_prop(win_T *wp, int type_id, int id, textprop_T *prop,
+							  linenr_T *found_lnum)
+{
+    linenr_T		lnum;
+    char_u		*props;
+    int			count;
+    int			i;
+
+    // w_botline may not have been updated yet.
+    validate_botline();
+    for (lnum = wp->w_topline; lnum < wp->w_botline; ++lnum)
+    {
+	count = get_text_props(wp->w_buffer, lnum, &props, FALSE);
+	for (i = 0; i < count; ++i)
+	{
+	    mch_memmove(prop, props + i * sizeof(textprop_T),
+							   sizeof(textprop_T));
+	    if (prop->tp_type == type_id && (id <= 0 || prop->tp_id == id))
+	    {
+		*found_lnum = lnum;
+		return OK;
+	    }
+	}
+    }
+    return FAIL;
 }
 
 /*
@@ -665,7 +714,7 @@ f_prop_remove(typval_T *argvars, typval_T *rettv)
 /*
  * Common for f_prop_type_add() and f_prop_type_change().
  */
-    void
+    static void
 prop_type_set(typval_T *argvars, int add)
 {
     char_u	*name;
@@ -695,11 +744,12 @@ prop_type_set(typval_T *argvars, int add)
 	    semsg(_("E969: Property type %s already defined"), name);
 	    return;
 	}
-	prop = alloc_clear(sizeof(proptype_T) + STRLEN(name));
+	prop = alloc_clear(offsetof(proptype_T, pt_name) + STRLEN(name) + 1);
 	if (prop == NULL)
 	    return;
 	STRCPY(prop->pt_name, name);
 	prop->pt_id = ++proptype_id;
+	prop->pt_flags = PT_FLAG_COMBINE;
 	htp = buf == NULL ? &global_proptypes : &buf->b_proptypes;
 	if (*htp == NULL)
 	{
@@ -1017,13 +1067,7 @@ adjust_prop_columns(
 	if (bytes_added > 0
 		&& (tmp_prop.tp_col >= col + (start_incl ? 2 : 1)))
 	{
-	    if (tmp_prop.tp_col < col + (start_incl ? 2 : 1))
-	    {
-		tmp_prop.tp_len += (tmp_prop.tp_col - 1 - col) + bytes_added;
-		tmp_prop.tp_col = col + 1;
-	    }
-	    else
-		tmp_prop.tp_col += bytes_added;
+	    tmp_prop.tp_col += bytes_added;
 	    // Save for undo if requested and not done yet.
 	    if ((flags & APC_SAVE_FOR_UNDO) && !dirty)
 		u_savesub(lnum);
@@ -1031,10 +1075,13 @@ adjust_prop_columns(
 	}
 	else if (bytes_added <= 0 && (tmp_prop.tp_col > col + 1))
 	{
+	    int len_changed = FALSE;
+
 	    if (tmp_prop.tp_col + bytes_added < col + 1)
 	    {
 		tmp_prop.tp_len += (tmp_prop.tp_col - 1 - col) + bytes_added;
 		tmp_prop.tp_col = col + 1;
+		len_changed = TRUE;
 	    }
 	    else
 		tmp_prop.tp_col += bytes_added;
@@ -1042,7 +1089,7 @@ adjust_prop_columns(
 	    if ((flags & APC_SAVE_FOR_UNDO) && !dirty)
 		u_savesub(lnum);
 	    dirty = TRUE;
-	    if (tmp_prop.tp_len <= 0)
+	    if (len_changed && tmp_prop.tp_len <= 0)
 		continue;  // drop this text property
 	}
 	else if (tmp_prop.tp_len > 0

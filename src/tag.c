@@ -35,6 +35,7 @@ typedef struct tag_pointers
     char_u	*tagkind_end;	// end of tagkind
     char_u	*user_data;	// user_data string
     char_u	*user_data_end;	// end of user_data
+    linenr_T	tagline;	// "line:" value
 } tagptrs_T;
 
 /*
@@ -737,7 +738,7 @@ do_tag(
 		if (ic && !msg_scrolled && msg_silent == 0)
 		{
 		    out_flush();
-		    ui_delay(1000L, TRUE);
+		    ui_delay(1007L, TRUE);
 		}
 	    }
 
@@ -1901,13 +1902,9 @@ find_tags(
 	    else
 #endif
 		fast_breakcheck();
-#ifdef FEAT_INS_EXPAND
 	    if ((flags & TAG_INS_COMP))	/* Double brackets for gcc */
 		ins_compl_check_keys(30, FALSE);
 	    if (got_int || ins_compl_interrupted())
-#else
-	    if (got_int)
-#endif
 	    {
 		stop_searching = TRUE;
 		break;
@@ -1941,7 +1938,7 @@ find_tags(
 	     */
 	    else if (state == TS_SKIP_BACK)
 	    {
-		search_info.curr_offset -= LSIZE * 2;
+		search_info.curr_offset -= lbuf_size * 2;
 		if (search_info.curr_offset < 0)
 		{
 		    search_info.curr_offset = 0;
@@ -1959,7 +1956,7 @@ find_tags(
 		/* Adjust the search file offset to the correct position */
 		search_info.curr_offset_used = search_info.curr_offset;
 		vim_fseek(fp, search_info.curr_offset, SEEK_SET);
-		eof = vim_fgets(lbuf, LSIZE, fp);
+		eof = vim_fgets(lbuf, lbuf_size, fp);
 		if (!eof && search_info.curr_offset != 0)
 		{
 		    /* The explicit cast is to work around a bug in gcc 3.4.2
@@ -1971,13 +1968,13 @@ find_tags(
 			vim_fseek(fp, search_info.low_offset, SEEK_SET);
 			search_info.curr_offset = search_info.low_offset;
 		    }
-		    eof = vim_fgets(lbuf, LSIZE, fp);
+		    eof = vim_fgets(lbuf, lbuf_size, fp);
 		}
 		/* skip empty and blank lines */
 		while (!eof && vim_isblankline(lbuf))
 		{
 		    search_info.curr_offset = vim_ftell(fp);
-		    eof = vim_fgets(lbuf, LSIZE, fp);
+		    eof = vim_fgets(lbuf, lbuf_size, fp);
 		}
 		if (eof)
 		{
@@ -2000,10 +1997,10 @@ find_tags(
 		{
 #ifdef FEAT_CSCOPE
 		    if (use_cscope)
-			eof = cs_fgets(lbuf, LSIZE);
+			eof = cs_fgets(lbuf, lbuf_size);
 		    else
 #endif
-			eof = vim_fgets(lbuf, LSIZE, fp);
+			eof = vim_fgets(lbuf, lbuf_size, fp);
 		} while (!eof && vim_isblankline(lbuf));
 
 		if (eof)
@@ -2202,23 +2199,23 @@ line_read_in:
 #endif
 
 #ifdef FEAT_TAG_BINS
-		/*
-		 * When starting a binary search, get the size of the file and
-		 * compute the first offset.
-		 */
+		// When starting a binary search, get the size of the file and
+		// compute the first offset.
 		if (state == TS_BINARY)
 		{
-		    /* Get the tag file size (don't use mch_fstat(), it's not
-		     * portable). */
-		    if ((filesize = vim_lseek(fileno(fp),
-						   (off_T)0L, SEEK_END)) <= 0)
+		    if (vim_fseek(fp, 0L, SEEK_END) != 0)
+			// can't seek, don't use binary search
 			state = TS_LINEAR;
 		    else
 		    {
-			vim_lseek(fileno(fp), (off_T)0L, SEEK_SET);
+			// Get the tag file size (don't use mch_fstat(), it's
+			// not portable).  Don't use lseek(), it doesn't work
+			// properly on MacOS Catalina.
+			filesize = vim_ftell(fp);
+			vim_fseek(fp, 0L, SEEK_SET);
 
-			/* Calculate the first read offset in the file.  Start
-			 * the search in the middle of the file. */
+			// Calculate the first read offset in the file.  Start
+			// the search in the middle of the file.
 			search_info.low_offset = 0;
 			search_info.low_char = 0;
 			search_info.high_offset = filesize;
@@ -2234,27 +2231,22 @@ parse_line:
 	    // When the line is too long the NUL will not be in the
 	    // last-but-one byte (see vim_fgets()).
 	    // Has been reported for Mozilla JS with extremely long names.
-	    // In that case we can't parse it and we ignore the line.
-	    if (lbuf[LSIZE - 2] != NUL
+	    // In that case we need to increase lbuf_size.
+	    if (lbuf[lbuf_size - 2] != NUL
 #ifdef FEAT_CSCOPE
 					     && !use_cscope
 #endif
 					     )
 	    {
-		if (p_verbose >= 5)
-		{
-		    verbose_enter();
-		    msg(_("Ignoring long line in tags file"));
-		    verbose_leave();
-		}
+		lbuf_size *= 2;
+		vim_free(lbuf);
+		lbuf = alloc(lbuf_size);
+		if (lbuf == NULL)
+		    goto findtag_end;
 #ifdef FEAT_TAG_BINS
-		if (state != TS_LINEAR)
-		{
-		    // Avoid getting stuck.
-		    linear = TRUE;
-		    state = TS_LINEAR;
-		    vim_fseek(fp, search_info.low_offset, SEEK_SET);
-		}
+		// this will try the same thing again, make sure the offset is
+		// different
+		search_info.curr_offset = 0;
 #endif
 		continue;
 	    }
@@ -3226,6 +3218,7 @@ parse_match(
 
     tagp->tagkind = NULL;
     tagp->user_data = NULL;
+    tagp->tagline = 0;
     tagp->command_end = NULL;
 
     if (retval == OK)
@@ -3246,6 +3239,8 @@ parse_match(
 			tagp->tagkind = p + 5;
 		    else if (STRNCMP(p, "user_data:", 10) == 0)
 			tagp->user_data = p + 10;
+		    else if (STRNCMP(p, "line:", 5) == 0)
+			tagp->tagline = atoi((char *)p + 5);
 		    if (tagp->tagkind != NULL && tagp->user_data != NULL)
 			break;
 		    pc = vim_strchr(p, ':');
@@ -3371,6 +3366,8 @@ jumpto_tag(
 	    break;
 #endif
 	*pbuf_end++ = *str++;
+	if (pbuf_end - pbuf + 1 >= LSIZE)
+	    break;
     }
     *pbuf_end = NUL;
 
@@ -3439,7 +3436,7 @@ jumpto_tag(
 	     * Make the preview window the current window.
 	     * Open a preview window when needed.
 	     */
-	    prepare_tagpreview(TRUE);
+	    prepare_tagpreview(TRUE, TRUE, FALSE);
 	}
     }
 
@@ -3543,16 +3540,15 @@ jumpto_tag(
 	    p_ws = TRUE;	/* need 'wrapscan' for backward searches */
 	    p_ic = FALSE;	/* don't ignore case now */
 	    p_scs = FALSE;
-#if 0	/* disabled for now */
-#ifdef FEAT_CMDHIST
-	    /* put pattern in search history */
-	    add_to_history(HIST_SEARCH, pbuf + 1, TRUE, pbuf[0]);
-#endif
-#endif
 	    save_lnum = curwin->w_cursor.lnum;
-	    curwin->w_cursor.lnum = 0;	/* start search before first line */
+	    if (tagp.tagline > 0)
+		// start search before line from "line:" field
+		curwin->w_cursor.lnum = tagp.tagline - 1;
+	    else
+		// start search before first line
+		curwin->w_cursor.lnum = 0;
 	    if (do_search(NULL, pbuf[0], pbuf + 1, (long)1,
-						   search_options, NULL, NULL))
+							 search_options, NULL))
 		retval = OK;
 	    else
 	    {
@@ -3564,7 +3560,7 @@ jumpto_tag(
 		 */
 		p_ic = TRUE;
 		if (!do_search(NULL, pbuf[0], pbuf + 1, (long)1,
-						   search_options, NULL, NULL))
+							 search_options, NULL))
 		{
 		    /*
 		     * Failed to find pattern, take a guess: "^func  ("
@@ -3575,13 +3571,13 @@ jumpto_tag(
 		    *tagp.tagname_end = NUL;
 		    sprintf((char *)pbuf, "^%s\\s\\*(", tagp.tagname);
 		    if (!do_search(NULL, '/', pbuf, (long)1,
-						   search_options, NULL, NULL))
+							 search_options, NULL))
 		    {
 			/* Guess again: "^char * \<func  (" */
 			sprintf((char *)pbuf, "^\\[#a-zA-Z_]\\.\\*\\<%s\\s\\*(",
 								tagp.tagname);
 			if (!do_search(NULL, '/', pbuf, (long)1,
-						   search_options, NULL, NULL))
+							 search_options, NULL))
 			    found = 0;
 		    }
 		    *tagp.tagname_end = cc;
@@ -3603,7 +3599,7 @@ jumpto_tag(
 			if (!msg_scrolled && msg_silent == 0)
 			{
 			    out_flush();
-			    ui_delay(1000L, TRUE);
+			    ui_delay(1010L, TRUE);
 			}
 		    }
 		    retval = OK;
@@ -3663,7 +3659,7 @@ jumpto_tag(
 	if (g_do_tagpreview != 0
 			   && curwin != curwin_save && win_valid(curwin_save))
 	{
-	    /* Return cursor to where we were */
+	    // Return cursor to where we were
 	    validate_cursor();
 	    redraw_later(VALID);
 	    win_enter(curwin_save, TRUE);
@@ -3675,12 +3671,29 @@ jumpto_tag(
     else
     {
 	--RedrawingDisabled;
-	if (postponed_split)		/* close the window */
+	got_int = FALSE;  // don't want entering window to fail
+
+	if (postponed_split)		// close the window
 	{
 	    win_close(curwin, FALSE);
 	    postponed_split = 0;
 	}
+#if defined(FEAT_QUICKFIX) && defined(FEAT_TEXT_PROP)
+	else if (WIN_IS_POPUP(curwin))
+	{
+	    win_T   *wp = curwin;
+
+	    if (win_valid(curwin_save))
+		win_enter(curwin_save, TRUE);
+	    popup_close(wp->w_id);
+	}
+#endif
     }
+#if defined(FEAT_QUICKFIX) && defined(FEAT_TEXT_PROP)
+    if (WIN_IS_POPUP(curwin))
+	// something went wrong, still in popup, but it can't have focus
+	win_enter(firstwin, TRUE);
+#endif
 
 erret:
 #if defined(FEAT_QUICKFIX)
@@ -3848,7 +3861,6 @@ tagstack_clear_entry(taggy_T *item)
     VIM_CLEAR(item->user_data);
 }
 
-#if defined(FEAT_CMDL_COMPL) || defined(PROTO)
     int
 expand_tags(
     int		tagnames,	/* expand tag names */
@@ -3896,7 +3908,6 @@ expand_tags(
     }
     return ret;
 }
-#endif
 
 #if defined(FEAT_EVAL) || defined(PROTO)
 /*

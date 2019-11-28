@@ -1,5 +1,7 @@
 " Test for options
 
+source check.vim
+
 func Test_whichwrap()
   set whichwrap=b,s
   call assert_equal('b,s', &whichwrap)
@@ -294,50 +296,78 @@ func Test_set_errors()
   call assert_fails('set t_foo=', 'E846:')
 endfunc
 
+func CheckWasSet(name)
+  let verb_cm = execute('verbose set ' .. a:name .. '?')
+  call assert_match('Last set from.*test_options.vim', verb_cm)
+endfunc
+func CheckWasNotSet(name)
+  let verb_cm = execute('verbose set ' .. a:name .. '?')
+  call assert_notmatch('Last set from', verb_cm)
+endfunc
+
 " Must be executed before other tests that set 'term'.
 func Test_000_term_option_verbose()
-  if has('gui_running')
-    return
-  endif
-  let verb_cm = execute('verbose set t_cm')
-  call assert_notmatch('Last set from', verb_cm)
+  CheckNotGui
+
+  call CheckWasNotSet('t_cm')
 
   let term_save = &term
   set term=ansi
-  let verb_cm = execute('verbose set t_cm')
-  call assert_match('Last set from.*test_options.vim', verb_cm)
+  call CheckWasSet('t_cm')
   let &term = term_save
 endfunc
 
+func Test_copy_context()
+  setlocal list
+  call CheckWasSet('list')
+  split
+  call CheckWasSet('list')
+  quit
+  setlocal nolist
+
+  set ai
+  call CheckWasSet('ai')
+  set filetype=perl
+  call CheckWasSet('filetype')
+  set fo=tcroq
+  call CheckWasSet('fo')
+
+  split Xsomebuf
+  call CheckWasSet('ai')
+  call CheckWasNotSet('filetype')
+  call CheckWasSet('fo')
+endfunc
+
 func Test_set_ttytype()
-  if !has('gui_running') && has('unix')
-    " Setting 'ttytype' used to cause a double-free when exiting vim and
-    " when vim is compiled with -DEXITFREE.
-    set ttytype=ansi
-    call assert_equal('ansi', &ttytype)
-    call assert_equal(&ttytype, &term)
-    set ttytype=xterm
-    call assert_equal('xterm', &ttytype)
-    call assert_equal(&ttytype, &term)
-    " "set ttytype=" gives E522 instead of E529
-    " in travis on some builds. Why?  Catch both for now
-    try
-      set ttytype=
-      call assert_report('set ttytype= did not fail')
-    catch /E529\|E522/
-    endtry
+  CheckUnix
+  CheckNotGui
 
-    " Some systems accept any terminal name and return dumb settings,
-    " check for failure of finding the entry and for missing 'cm' entry.
-    try
-      set ttytype=xxx
-      call assert_report('set ttytype=xxx did not fail')
-    catch /E522\|E437/
-    endtry
+  " Setting 'ttytype' used to cause a double-free when exiting vim and
+  " when vim is compiled with -DEXITFREE.
+  set ttytype=ansi
+  call assert_equal('ansi', &ttytype)
+  call assert_equal(&ttytype, &term)
+  set ttytype=xterm
+  call assert_equal('xterm', &ttytype)
+  call assert_equal(&ttytype, &term)
+  " "set ttytype=" gives E522 instead of E529
+  " in travis on some builds. Why?  Catch both for now
+  try
+    set ttytype=
+    call assert_report('set ttytype= did not fail')
+  catch /E529\|E522/
+  endtry
 
-    set ttytype&
-    call assert_equal(&ttytype, &term)
-  endif
+  " Some systems accept any terminal name and return dumb settings,
+  " check for failure of finding the entry and for missing 'cm' entry.
+  try
+    set ttytype=xxx
+    call assert_report('set ttytype=xxx did not fail')
+  catch /E522\|E437/
+  endtry
+
+  set ttytype&
+  call assert_equal(&ttytype, &term)
 endfunc
 
 func Test_set_all()
@@ -508,7 +538,7 @@ func Test_shortmess_F2()
   call assert_true(empty(execute('bn', '')))
   call assert_false(test_getvalue('need_fileinfo'))
   call assert_true(empty(execute('bn', '')))
-  call assert_false(test_getvalue('need_fileinfo'))
+  call assert_false('need_fileinfo'->test_getvalue())
   set hidden
   call assert_true(empty(execute('bn', '')))
   call assert_false(test_getvalue('need_fileinfo'))

@@ -58,7 +58,6 @@ NEW_TESTS = \
 	test_arabic \
 	test_arglist \
 	test_assert \
-	test_assign \
 	test_autochdir \
 	test_autocmd \
 	test_autoload \
@@ -92,6 +91,7 @@ NEW_TESTS = \
 	test_crypt \
 	test_cscope \
 	test_cursor_func \
+	test_cursorline \
 	test_curswant \
 	test_debugger \
 	test_delete \
@@ -106,6 +106,7 @@ NEW_TESTS = \
 	test_ex_equal \
 	test_ex_undo \
 	test_ex_z \
+	test_excmd \
 	test_exec_while_if \
 	test_execute_func \
 	test_exists \
@@ -179,6 +180,7 @@ NEW_TESTS = \
 	test_matchadd_conceal \
 	test_matchadd_conceal_utf8 \
 	test_memory_usage \
+	test_method \
 	test_menu \
 	test_messages \
 	test_mksession \
@@ -197,6 +199,7 @@ NEW_TESTS = \
 	test_plus_arg_edit \
 	test_popup \
 	test_popupwin \
+	test_popupwin_textprop \
 	test_preview \
 	test_profile \
 	test_prompt_buffer \
@@ -225,6 +228,7 @@ NEW_TESTS = \
 	test_searchpos \
 	test_set \
 	test_sha256 \
+	test_shift \
 	test_shortpathname \
 	test_signals \
 	test_signs \
@@ -234,6 +238,7 @@ NEW_TESTS = \
 	test_source \
 	test_source_utf8 \
 	test_spell \
+	test_spellfile \
 	test_startup \
 	test_startup_utf8 \
 	test_stat \
@@ -261,6 +266,7 @@ NEW_TESTS = \
 	test_textprop \
 	test_timers \
 	test_true_false \
+	test_trycatch \
 	test_undo \
 	test_unlet \
 	test_user_func \
@@ -328,6 +334,7 @@ NEW_TESTS_RES = \
 	test_erasebackword.res \
 	test_escaped_glob.res \
 	test_eval_stuff.res \
+	test_excmd.res \
 	test_exec_while_if.res \
 	test_exists.res \
 	test_exists_autocmd.res \
@@ -368,9 +375,11 @@ NEW_TESTS_RES = \
 	test_makeencoding.res \
 	test_man.res \
 	test_maparg.res \
+	test_mapping.res \
 	test_marks.res \
 	test_matchadd_conceal.res \
 	test_memory_usage.res \
+	test_method.res \
 	test_mksession.res \
 	test_nested_function.res \
 	test_netbeans.res \
@@ -382,6 +391,7 @@ NEW_TESTS_RES = \
 	test_perl.res \
 	test_plus_arg_edit.res \
 	test_popupwin.res \
+	test_popupwin_textprop.res \
 	test_preview.res \
 	test_profile.res \
 	test_prompt_buffer.res \
@@ -407,6 +417,7 @@ NEW_TESTS_RES = \
 	test_sound.res \
 	test_source.res \
 	test_spell.res \
+	test_spellfile.res \
 	test_startup.res \
 	test_stat.res \
 	test_substitute.res \
@@ -422,6 +433,7 @@ NEW_TESTS_RES = \
 	test_textformat.res \
 	test_textobjects.res \
 	test_textprop.res \
+	test_trycatch.res \
 	test_undo.res \
 	test_user_func.res \
 	test_usercommands.res \

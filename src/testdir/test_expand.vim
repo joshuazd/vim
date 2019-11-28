@@ -35,7 +35,7 @@ func Test_with_tilde()
   call assert_true(isdirectory('Xdir ~ dir'))
   cd Xdir\ ~\ dir
   call assert_true(getcwd() =~ 'Xdir \~ dir')
-  exe 'cd ' . fnameescape(dir)
+  call chdir(dir)
   call delete('Xdir ~ dir', 'd')
   call assert_false(isdirectory('Xdir ~ dir'))
 endfunc
@@ -58,7 +58,7 @@ func Test_expandcmd()
   call assert_equal('e Xfile1', expandcmd('e %'))
   edit Xfile2
   edit Xfile1
-  call assert_equal('e Xfile2', expandcmd('e #'))
+  call assert_equal('e Xfile2', 'e #'->expandcmd())
   edit Xfile2
   edit Xfile3
   edit Xfile4
