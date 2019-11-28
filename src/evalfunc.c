@@ -20,7 +20,7 @@
 # include <float.h>
 #endif
 
-#ifdef MACOS_X
+#if defined(MACOS_X)
 # include <time.h>	// for time_t
 #endif
 
@@ -114,6 +114,7 @@ static void f_inputlist(typval_T *argvars, typval_T *rettv);
 static void f_inputrestore(typval_T *argvars, typval_T *rettv);
 static void f_inputsave(typval_T *argvars, typval_T *rettv);
 static void f_inputsecret(typval_T *argvars, typval_T *rettv);
+static void f_interrupt(typval_T *argvars, typval_T *rettv);
 static void f_invert(typval_T *argvars, typval_T *rettv);
 static void f_islocked(typval_T *argvars, typval_T *rettv);
 #if defined(FEAT_FLOAT) && defined(HAVE_MATH_H)
@@ -168,6 +169,7 @@ static void f_pyeval(typval_T *argvars, typval_T *rettv);
 #if defined(FEAT_PYTHON) || defined(FEAT_PYTHON3)
 static void f_pyxeval(typval_T *argvars, typval_T *rettv);
 #endif
+static void f_rand(typval_T *argvars, typval_T *rettv);
 static void f_range(typval_T *argvars, typval_T *rettv);
 static void f_reg_executing(typval_T *argvars, typval_T *rettv);
 static void f_reg_recording(typval_T *argvars, typval_T *rettv);
@@ -224,6 +226,7 @@ static void f_spellsuggest(typval_T *argvars, typval_T *rettv);
 static void f_split(typval_T *argvars, typval_T *rettv);
 #ifdef FEAT_FLOAT
 static void f_sqrt(typval_T *argvars, typval_T *rettv);
+static void f_srand(typval_T *argvars, typval_T *rettv);
 static void f_str2float(typval_T *argvars, typval_T *rettv);
 #endif
 static void f_str2list(typval_T *argvars, typval_T *rettv);
@@ -237,6 +240,9 @@ static void f_stridx(typval_T *argvars, typval_T *rettv);
 static void f_strlen(typval_T *argvars, typval_T *rettv);
 static void f_strcharpart(typval_T *argvars, typval_T *rettv);
 static void f_strpart(typval_T *argvars, typval_T *rettv);
+#ifdef HAVE_STRPTIME
+static void f_strptime(typval_T *argvars, typval_T *rettv);
+#endif
 static void f_strridx(typval_T *argvars, typval_T *rettv);
 static void f_strtrans(typval_T *argvars, typval_T *rettv);
 static void f_strdisplaywidth(typval_T *argvars, typval_T *rettv);
@@ -506,6 +512,7 @@ static funcentry_T global_functions[] =
     {"inputsave",	0, 0, 0,	  f_inputsave},
     {"inputsecret",	1, 2, FEARG_1,	  f_inputsecret},
     {"insert",		2, 3, FEARG_1,	  f_insert},
+    {"interrupt",	0, 0, 0,	  f_interrupt},
     {"invert",		1, 1, FEARG_1,	  f_invert},
     {"isdirectory",	1, 1, FEARG_1,	  f_isdirectory},
 #if defined(FEAT_FLOAT) && defined(HAVE_MATH_H)
@@ -629,6 +636,7 @@ static funcentry_T global_functions[] =
 #if defined(FEAT_PYTHON) || defined(FEAT_PYTHON3)
     {"pyxeval",		1, 1, FEARG_1,	  f_pyxeval},
 #endif
+    {"rand",		0, 1, FEARG_1,	  f_rand},
     {"range",		1, 3, FEARG_1,	  f_range},
     {"readdir",		1, 2, FEARG_1,	  f_readdir},
     {"readfile",	1, 3, FEARG_1,	  f_readfile},
@@ -720,6 +728,7 @@ static funcentry_T global_functions[] =
     {"split",		1, 3, FEARG_1,	  f_split},
 #ifdef FEAT_FLOAT
     {"sqrt",		1, 1, FEARG_1,	  f_sqrt},
+    {"srand",		0, 1, FEARG_1,	  f_srand},
 #endif
     {"state",		0, 1, FEARG_1,	  f_state},
 #ifdef FEAT_FLOAT
@@ -738,6 +747,9 @@ static funcentry_T global_functions[] =
     {"string",		1, 1, FEARG_1,	  f_string},
     {"strlen",		1, 1, FEARG_1,	  f_strlen},
     {"strpart",		2, 3, FEARG_1,	  f_strpart},
+#ifdef HAVE_STRPTIME
+    {"strptime",	2, 2, FEARG_1,	  f_strptime},
+#endif
     {"strridx",		2, 3, FEARG_1,	  f_strridx},
     {"strtrans",	1, 1, FEARG_1,	  f_strtrans},
     {"strwidth",	1, 1, FEARG_1,	  f_strwidth},
@@ -2530,7 +2542,7 @@ common_function(typval_T *argvars, typval_T *rettv, int is_funcref)
 		    arg_idx = 0;
 		else if (list->lv_len > MAX_FUNC_ARGS)
 		{
-		    emsg_funcname((char *)e_toomanyarg, name);
+		    emsg_funcname((char *)e_toomanyarg, s);
 		    vim_free(name);
 		    goto theend;
 		}
@@ -3395,9 +3407,6 @@ f_has(typval_T *argvars, typval_T *rettv)
 #ifdef FEAT_GUI_MSWIN
 	"gui_win32",
 #endif
-#ifdef FEAT_HANGULIN
-	"hangul_input",
-#endif
 #if defined(HAVE_ICONV_H) && defined(USE_ICONV)
 	"iconv",
 #endif
@@ -4146,6 +4155,15 @@ f_inputsecret(typval_T *argvars, typval_T *rettv)
     f_input(argvars, rettv);
     --cmdline_star;
     --inputsecret_flag;
+}
+
+/*
+ * "interrupt()" function
+ */
+    static void
+f_interrupt(typval_T *argvars UNUSED, typval_T *rettv UNUSED)
+{
+    got_int = TRUE;
 }
 
 /*
@@ -5113,6 +5131,79 @@ f_pyxeval(typval_T *argvars, typval_T *rettv)
 # endif
 }
 #endif
+
+/*
+ * "rand()" function
+ */
+    static void
+f_rand(typval_T *argvars, typval_T *rettv)
+{
+    list_T	*l = NULL;
+    UINT32_T	x, y, z, w, t;
+    static int	rand_seed_initialized = FALSE;
+    static UINT32_T xyzw[4] = {123456789, 362436069, 521288629, 88675123};
+
+#define SHUFFLE_XORSHIFT128 \
+	t = x ^ (x << 11); \
+	x = y; y = z; z = w; \
+	w = (w ^ (w >> 19)) ^ (t ^ (t >> 8));
+
+    if (argvars[0].v_type == VAR_UNKNOWN)
+    {
+	// When argument is not given, return random number initialized
+	// statically.
+	if (!rand_seed_initialized)
+	{
+	    xyzw[0] = (varnumber_T)time(NULL);
+	    rand_seed_initialized = TRUE;
+	}
+
+	x = xyzw[0];
+	y = xyzw[1];
+	z = xyzw[2];
+	w = xyzw[3];
+	SHUFFLE_XORSHIFT128;
+	xyzw[0] = x;
+	xyzw[1] = y;
+	xyzw[2] = z;
+	xyzw[3] = w;
+    }
+    else if (argvars[0].v_type == VAR_LIST)
+    {
+	listitem_T	*lx, *ly, *lz, *lw;
+
+	l = argvars[0].vval.v_list;
+	if (list_len(l) != 4)
+	    goto theend;
+
+	lx = list_find(l, 0L);
+	ly = list_find(l, 1L);
+	lz = list_find(l, 2L);
+	lw = list_find(l, 3L);
+	if (lx->li_tv.v_type != VAR_NUMBER) goto theend;
+	if (ly->li_tv.v_type != VAR_NUMBER) goto theend;
+	if (lz->li_tv.v_type != VAR_NUMBER) goto theend;
+	if (lw->li_tv.v_type != VAR_NUMBER) goto theend;
+	x = (UINT32_T)lx->li_tv.vval.v_number;
+	y = (UINT32_T)ly->li_tv.vval.v_number;
+	z = (UINT32_T)lz->li_tv.vval.v_number;
+	w = (UINT32_T)lw->li_tv.vval.v_number;
+	SHUFFLE_XORSHIFT128;
+	lx->li_tv.vval.v_number = (varnumber_T)x;
+	ly->li_tv.vval.v_number = (varnumber_T)y;
+	lz->li_tv.vval.v_number = (varnumber_T)z;
+	lw->li_tv.vval.v_number = (varnumber_T)w;
+    }
+    else
+	goto theend;
+
+    rettv->v_type = VAR_NUMBER;
+    rettv->vval.v_number = (varnumber_T)w;
+    return;
+
+theend:
+    semsg(_(e_invarg2), tv_get_string(&argvars[0]));
+}
 
 /*
  * "range()" function
@@ -6999,6 +7090,66 @@ f_sqrt(typval_T *argvars, typval_T *rettv)
 }
 
 /*
+ * "srand()" function
+ */
+    static void
+f_srand(typval_T *argvars, typval_T *rettv)
+{
+    static int dev_urandom_state = -1;  // FAIL or OK once tried
+
+    if (rettv_list_alloc(rettv) == FAIL)
+	return;
+    if (argvars[0].v_type == VAR_UNKNOWN)
+    {
+	if (dev_urandom_state != FAIL)
+	{
+	    int  fd = open("/dev/urandom", O_RDONLY);
+	    struct {
+		union {
+		    UINT32_T number;
+		    char     bytes[sizeof(UINT32_T)];
+		} cont;
+	    } buf;
+
+	    // Attempt reading /dev/urandom.
+	    if (fd == -1)
+		dev_urandom_state = FAIL;
+	    else
+	    {
+		buf.cont.number = 0;
+		if (read(fd, buf.cont.bytes, sizeof(UINT32_T))
+							   != sizeof(UINT32_T))
+		    dev_urandom_state = FAIL;
+		else
+		{
+		    dev_urandom_state = OK;
+		    list_append_number(rettv->vval.v_list,
+						 (varnumber_T)buf.cont.number);
+		}
+		close(fd);
+	    }
+
+	}
+	if (dev_urandom_state != OK)
+	    // Reading /dev/urandom doesn't work, fall back to time().
+	    list_append_number(rettv->vval.v_list, (varnumber_T)vim_time());
+    }
+    else
+    {
+	int	    error = FALSE;
+	UINT32_T    x = (UINT32_T)tv_get_number_chk(&argvars[0], &error);
+
+	if (error)
+	    return;
+
+	list_append_number(rettv->vval.v_list, (varnumber_T)x);
+    }
+    list_append_number(rettv->vval.v_list, 362436069);
+    list_append_number(rettv->vval.v_list, 521288629);
+    list_append_number(rettv->vval.v_list, 88675123);
+}
+
+/*
  * "str2float()" function
  */
     static void
@@ -7411,6 +7562,40 @@ f_strpart(typval_T *argvars, typval_T *rettv)
     rettv->v_type = VAR_STRING;
     rettv->vval.v_string = vim_strnsave(p + n, len);
 }
+
+#ifdef HAVE_STRPTIME
+/*
+ * "strptime({format}, {timestring})" function
+ */
+    static void
+f_strptime(typval_T *argvars, typval_T *rettv)
+{
+    struct tm	tmval;
+    char_u	*fmt;
+    char_u	*str;
+    vimconv_T   conv;
+    char_u	*enc;
+
+    vim_memset(&tmval, NUL, sizeof(tmval));
+    fmt = tv_get_string(&argvars[0]);
+    str = tv_get_string(&argvars[1]);
+
+    conv.vc_type = CONV_NONE;
+    enc = enc_locale();
+    convert_setup(&conv, p_enc, enc);
+    if (conv.vc_type != CONV_NONE)
+	fmt = string_convert(&conv, fmt, NULL);
+    if (fmt == NULL
+	    || strptime((char *)str, (char *)fmt, &tmval) == NULL
+	    || (rettv->vval.v_number = mktime(&tmval)) == -1)
+	rettv->vval.v_number = 0;
+
+    if (conv.vc_type != CONV_NONE)
+	vim_free(fmt);
+    convert_setup(&conv, NULL, NULL);
+    vim_free(enc);
+}
+#endif
 
 /*
  * "strridx()" function

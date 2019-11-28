@@ -460,6 +460,18 @@ screen_line(
     }
 #endif /* FEAT_RIGHTLEFT */
 
+#ifdef FEAT_TEXT_PROP
+    // First char of a popup window may go on top of the right half of a
+    // double-wide character. Clear the left half to avoid it getting the popup
+    // window background color.
+    if (coloff > 0 && ScreenLines[off_to] == 0)
+    {
+	ScreenLines[off_to - 1] = ' ';
+	ScreenLinesUC[off_to - 1] = 0;
+	screen_char(off_to - 1, row, col + coloff - 1);
+    }
+#endif
+
     redraw_next = char_needs_redraw(off_from, off_to, endcol - col);
 
     while (col < endcol)
@@ -4040,19 +4052,6 @@ showmode(void)
 # else
 		msg_puts_attr(" XIM", attr);
 # endif
-#endif
-#if defined(FEAT_HANGULIN) && defined(FEAT_GUI)
-	    if (gui.in_use)
-	    {
-		if (hangul_input_state_get())
-		{
-		    /* HANGUL */
-		    if (enc_utf8)
-			msg_puts_attr(" \355\225\234\352\270\200", attr);
-		    else
-			msg_puts_attr(" \307\321\261\333", attr);
-		}
-	    }
 #endif
 	    /* CTRL-X in Insert mode */
 	    if (edit_submode != NULL && !shortmess(SHM_COMPLETIONMENU))

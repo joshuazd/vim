@@ -1525,6 +1525,38 @@ updatescript(int c)
 }
 
 /*
+ * Convert "c" plus "mod_mask" to merge the effect of modifyOtherKeys into the
+ * character.
+ */
+    int
+merge_modifyOtherKeys(int c_arg)
+{
+    int c = c_arg;
+
+    if (mod_mask & MOD_MASK_CTRL)
+    {
+	if ((c >= '`' && c <= 0x7f) || (c >= '@' && c <= '_'))
+	{
+	    c &= 0x1f;
+	    mod_mask &= ~MOD_MASK_CTRL;
+	}
+	else if (c == '6')
+	{
+	    // CTRL-6 is equivalent to CTRL-^
+	    c = 0x1e;
+	    mod_mask &= ~MOD_MASK_CTRL;
+	}
+    }
+    if ((mod_mask & (MOD_MASK_META | MOD_MASK_ALT))
+	    && c >= 0 && c <= 127)
+    {
+	c += 0x80;
+	mod_mask &= ~(MOD_MASK_META|MOD_MASK_ALT);
+    }
+    return c;
+}
+
+/*
  * Get the next input character.
  * Can return a special key or a multi-byte character.
  * Can return NUL when called recursively, use safe_vgetc() if that's not
@@ -1765,23 +1797,9 @@ vgetc(void)
 	    }
 
 	    if (!no_reduce_keys)
-	    {
 		// A modifier was not used for a mapping, apply it to ASCII
 		// keys.  Shift would already have been applied.
-		if ((mod_mask & MOD_MASK_CTRL)
-			&& ((c >= '`' && c <= 0x7f)
-			    || (c >= '@' && c <= '_')))
-		{
-		    c &= 0x1f;
-		    mod_mask &= ~MOD_MASK_CTRL;
-		}
-		if ((mod_mask & (MOD_MASK_META | MOD_MASK_ALT))
-			&& c >= 0 && c <= 127)
-		{
-		    c += 0x80;
-		    mod_mask &= ~(MOD_MASK_META|MOD_MASK_ALT);
-		}
-	    }
+		c = merge_modifyOtherKeys(c);
 
 	    break;
 	}
@@ -2587,6 +2605,8 @@ handle_mapping(
 	{
 	    int save_vgetc_busy = vgetc_busy;
 	    int save_may_garbage_collect = may_garbage_collect;
+	    int was_screen_col = screen_cur_col;
+	    int was_screen_row = screen_cur_row;
 
 	    vgetc_busy = 0;
 	    may_garbage_collect = FALSE;
@@ -2594,6 +2614,11 @@ handle_mapping(
 	    save_m_keys = vim_strsave(mp->m_keys);
 	    save_m_str = vim_strsave(mp->m_str);
 	    map_str = eval_map_expr(save_m_str, NUL);
+
+	    // The mapping may do anything, but we expect it to take care of
+	    // redrawing.  Do put the cursor back where it was.
+	    windgoto(was_screen_row, was_screen_col);
+	    out_flush();
 
 	    vgetc_busy = save_vgetc_busy;
 	    may_garbage_collect = save_may_garbage_collect;
