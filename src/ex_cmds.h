@@ -407,7 +407,7 @@ EXCMD(CMD_cpfile,	"cpfile",	ex_cnext,
 	EX_RANGE|EX_COUNT|EX_TRLBAR|EX_BANG,
 	ADDR_OTHER),
 EXCMD(CMD_cquit,	"cquit",	ex_cquit,
-	EX_TRLBAR|EX_BANG,
+	EX_RANGE|EX_COUNT|EX_ZEROR|EX_TRLBAR|EX_BANG,
 	ADDR_NONE),
 EXCMD(CMD_crewind,	"crewind",	ex_cc,
 	EX_RANGE|EX_COUNT|EX_TRLBAR|EX_BANG,
@@ -1841,7 +1841,7 @@ struct exarg
     char_u	*(*getline)(int, void *, int, int);
     void	*cookie;	// argument for getline()
 #ifdef FEAT_EVAL
-    struct condstack *cstack;	// condition stack for ":if" etc.
+    cstack_T	*cstack;	// condition stack for ":if" etc.
 #endif
     long	verbose_save;	 // saved value of p_verbose
     int		save_msg_silent; // saved value of msg_silent

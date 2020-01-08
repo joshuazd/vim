@@ -276,6 +276,7 @@ static void f_type(typval_T *argvars, typval_T *rettv);
 static void f_virtcol(typval_T *argvars, typval_T *rettv);
 static void f_visualmode(typval_T *argvars, typval_T *rettv);
 static void f_wildmenumode(typval_T *argvars, typval_T *rettv);
+static void f_windowsversion(typval_T *argvars, typval_T *rettv);
 static void f_wordcount(typval_T *argvars, typval_T *rettv);
 static void f_xor(typval_T *argvars, typval_T *rettv);
 
@@ -864,6 +865,7 @@ static funcentry_T global_functions[] =
     {"win_splitmove",   2, 3, FEARG_1,    f_win_splitmove},
     {"winbufnr",	1, 1, FEARG_1,	  f_winbufnr},
     {"wincol",		0, 0, 0,	  f_wincol},
+    {"windowsversion",	0, 0, 0,	  f_windowsversion},
     {"winheight",	1, 1, FEARG_1,	  f_winheight},
     {"winlayout",	0, 1, FEARG_1,	  f_winlayout},
     {"winline",		0, 0, 0,	  f_winline},
@@ -974,14 +976,14 @@ call_internal_func(
 
     i = find_internal_func(name);
     if (i < 0)
-	return ERROR_UNKNOWN;
+	return FCERR_UNKNOWN;
     if (argcount < global_functions[i].f_min_argc)
-	return ERROR_TOOFEW;
+	return FCERR_TOOFEW;
     if (argcount > global_functions[i].f_max_argc)
-	return ERROR_TOOMANY;
+	return FCERR_TOOMANY;
     argvars[argcount].v_type = VAR_UNKNOWN;
     global_functions[i].f_func(argvars, rettv);
-    return ERROR_NONE;
+    return FCERR_NONE;
 }
 
 /*
@@ -1001,13 +1003,13 @@ call_internal_method(
 
     fi = find_internal_func(name);
     if (fi < 0)
-	return ERROR_UNKNOWN;
+	return FCERR_UNKNOWN;
     if (global_functions[fi].f_argtype == 0)
-	return ERROR_NOTMETHOD;
+	return FCERR_NOTMETHOD;
     if (argcount + 1 < global_functions[fi].f_min_argc)
-	return ERROR_TOOFEW;
+	return FCERR_TOOFEW;
     if (argcount + 1 > global_functions[fi].f_max_argc)
-	return ERROR_TOOMANY;
+	return FCERR_TOOMANY;
 
     if (global_functions[fi].f_argtype == FEARG_LAST)
     {
@@ -1053,7 +1055,7 @@ call_internal_method(
     argv[argcount + 1].v_type = VAR_UNKNOWN;
 
     global_functions[fi].f_func(argv, rettv);
-    return ERROR_NONE;
+    return FCERR_NONE;
 }
 
 /*
@@ -6774,7 +6776,8 @@ f_settagstack(typval_T *argvars, typval_T *rettv)
 	actstr = tv_get_string_chk(&argvars[2]);
 	if (actstr == NULL)
 	    return;
-	if ((*actstr == 'r' || *actstr == 'a') && actstr[1] == NUL)
+	if ((*actstr == 'r' || *actstr == 'a' || *actstr == 't')
+		&& actstr[1] == NUL)
 	    action = *actstr;
 	else
 	{
@@ -8405,6 +8408,16 @@ f_wildmenumode(typval_T *argvars UNUSED, typval_T *rettv UNUSED)
     if (wild_menu_showing)
 	rettv->vval.v_number = 1;
 #endif
+}
+
+/*
+ * "windowsversion()" function
+ */
+    static void
+f_windowsversion(typval_T *argvars UNUSED, typval_T *rettv UNUSED)
+{
+    rettv->v_type = VAR_STRING;
+    rettv->vval.v_string = vim_strsave((char_u *)windowsVersion);
 }
 
 /*

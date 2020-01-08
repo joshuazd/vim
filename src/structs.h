@@ -68,7 +68,7 @@ typedef struct VimMenu vimmenu_T;
 #endif
 
 /*
- * SCript ConteXt (SCTX): identifies a script script line.
+ * SCript ConteXt (SCTX): identifies a script line.
  * When sourcing a script "sc_lnum" is zero, "sourcing_lnum" is the current
  * line number. When executing a user function "sc_lnum" is the line where the
  * function was defined, "sourcing_lnum" is the line number inside the
@@ -863,8 +863,7 @@ struct eslist_elem
  */
 #define CSTACK_LEN	50
 
-struct condstack
-{
+typedef struct {
     short	cs_flags[CSTACK_LEN];	// CSF_ flags
     char	cs_pending[CSTACK_LEN];	// CSTP_: what's pending in ":finally"
     union {
@@ -878,7 +877,7 @@ struct condstack
     int		cs_trylevel;		// nr of nested ":try"s
     eslist_T	*cs_emsg_silent_list;	// saved values of "emsg_silent"
     char	cs_lflags;		// loop flags: CSL_ flags
-};
+} cstack_T;
 # define cs_rettv	cs_pend.csp_rv
 # define cs_exception	cs_pend.csp_ex
 
@@ -912,7 +911,7 @@ struct condstack
 # define CSTP_FINISH	32	// ":finish" is pending
 
 /*
- * Flags for the cs_lflags item in struct condstack.
+ * Flags for the cs_lflags item in cstack_T.
  */
 # define CSL_HAD_LOOP	 1	// just found ":while" or ":for"
 # define CSL_HAD_ENDLOOP 2	// just found ":endwhile" or ":endfor"
@@ -1497,6 +1496,8 @@ typedef struct
 				// used for s: variables
     int		uf_refcount;	// reference count, see func_name_refcount()
     funccall_T	*uf_scoped;	// l: local variables for closure
+    char_u	*uf_name_exp;	// if "uf_name[]" starts with SNR the name with
+				// "<SNR>" as a string, otherwise NULL
     char_u	uf_name[1];	// name of function (actually longer); can
 				// start with <SNR>123_ (<SNR> is K_SPECIAL
 				// KS_EXTRA KE_SNR)
@@ -1665,6 +1666,38 @@ struct partial_S
     typval_T	*pt_argv;	// arguments in allocated array
     dict_T	*pt_dict;	// dict for "self"
 };
+
+typedef struct AutoPatCmd_S AutoPatCmd;
+
+/*
+ * Entry in the execution stack "exestack".
+ */
+typedef enum {
+    ETYPE_TOP,		    // toplevel
+    ETYPE_SCRIPT,           // sourcing script, use es_info.sctx
+    ETYPE_UFUNC,            // user function, use es_info.ufunc
+    ETYPE_AUCMD,            // autocomand, use es_info.aucmd
+    ETYPE_MODELINE,         // modeline, use es_info.sctx
+    ETYPE_EXCEPT,           // exception, use es_info.exception
+    ETYPE_ARGS,             // command line argument
+    ETYPE_ENV,              // environment variable
+    ETYPE_INTERNAL,         // internal operation
+    ETYPE_SPELL,            // loading spell file
+} etype_T;
+
+typedef struct {
+    long      es_lnum;      // replaces "sourcing_lnum"
+    char_u    *es_name;     // replaces "sourcing_name"
+    etype_T   es_type;
+    union {
+	sctx_T  *sctx;      // script and modeline info
+#if defined(FEAT_EVAL)
+	ufunc_T *ufunc;     // function info
+#endif
+	AutoPatCmd *aucmd;  // autocommand info
+	except_T   *except; // exception info
+    } es_info;
+} estack_T;
 
 // Information returned by get_tty_info().
 typedef struct {
@@ -3629,15 +3662,17 @@ typedef struct {
  */
 typedef enum
 {
-    TYPE_UNKNOWN = 0,
-    TYPE_EQUAL,		// ==
-    TYPE_NEQUAL,	// !=
-    TYPE_GREATER,	// >
-    TYPE_GEQUAL,	// >=
-    TYPE_SMALLER,	// <
-    TYPE_SEQUAL,	// <=
-    TYPE_MATCH,		// =~
-    TYPE_NOMATCH,	// !~
+    EXPR_UNKNOWN = 0,
+    EXPR_EQUAL,		// ==
+    EXPR_NEQUAL,	// !=
+    EXPR_GREATER,	// >
+    EXPR_GEQUAL,	// >=
+    EXPR_SMALLER,	// <
+    EXPR_SEQUAL,	// <=
+    EXPR_MATCH,		// =~
+    EXPR_NOMATCH,	// !~
+    EXPR_IS,		// is
+    EXPR_ISNOT,		// isnot
 } exptype_T;
 
 /*
