@@ -1111,6 +1111,7 @@ SCRIPTLOC	= $(VIMRTLOC)
 
 ### Name of the defaults/evim/mswin file target.
 VIM_DEFAULTS_FILE = $(DESTDIR)$(SCRIPTLOC)/defaults.vim
+VIM_DEBIAN_FILE = $(DESTDIR)$(SCRIPTLOC)/debian.vim
 EVIM_FILE	= $(DESTDIR)$(SCRIPTLOC)/evim.vim
 MSWIN_FILE	= $(DESTDIR)$(SCRIPTLOC)/mswin.vim
 
@@ -2386,6 +2387,8 @@ installrtbase: $(HELPSOURCE)/vim.1 $(DEST_VIM) $(DEST_RT) \
 # install the defaults/evim/mswin file
 	$(INSTALL_DATA) $(SCRIPTSOURCE)/defaults.vim $(VIM_DEFAULTS_FILE)
 	chmod $(VIMSCRIPTMOD) $(VIM_DEFAULTS_FILE)
+	$(INSTALL_DATA) $(SCRIPTSOURCE)/debian.vim $(VIM_DEBIAN_FILE)
+	chmod $(VIMSCRIPTMOD) $(VIM_DEBIAN_FILE)
 	$(INSTALL_DATA) $(SCRIPTSOURCE)/evim.vim $(EVIM_FILE)
 	chmod $(VIMSCRIPTMOD) $(EVIM_FILE)
 	$(INSTALL_DATA) $(SCRIPTSOURCE)/mswin.vim $(MSWIN_FILE)
