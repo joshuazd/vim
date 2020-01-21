@@ -1229,12 +1229,13 @@ typedef struct {
  * When OPT_GLOBAL and OPT_LOCAL are both missing, set both local and global
  * values, get local value.
  */
-#define OPT_FREE	1	// free old value if it was allocated
-#define OPT_GLOBAL	2	// use global value
-#define OPT_LOCAL	4	// use local value
-#define OPT_MODELINE	8	// option in modeline
-#define OPT_WINONLY	16	// only set window-local options
-#define OPT_NOWIN	32	// don't set window-local options
+#define OPT_FREE	0x01	// free old value if it was allocated
+#define OPT_GLOBAL	0x02	// use global value
+#define OPT_LOCAL	0x04	// use local value
+#define OPT_MODELINE	0x08	// option in modeline
+#define OPT_WINONLY	0x10	// only set window-local options
+#define OPT_NOWIN	0x20	// don't set window-local options
+#define OPT_ONECOLUMN	0x40	// list options one per line
 
 // Magic chars used in confirm dialog strings
 #define DLG_BUTTON_SEP	'\n'
@@ -2019,11 +2020,11 @@ typedef int sock_T;
 #define VV_ARGV		93
 #define VV_LEN		94	// number of v: vars
 
-// used for v_number in VAR_SPECIAL
-#define VVAL_FALSE	0L
-#define VVAL_TRUE	1L
-#define VVAL_NONE	2L
-#define VVAL_NULL	3L
+// used for v_number in VAR_BOOL and VAR_SPECIAL
+#define VVAL_FALSE	0L	// VAR_BOOL
+#define VVAL_TRUE	1L	// VAR_BOOL
+#define VVAL_NONE	2L	// VAR_SPECIAL
+#define VVAL_NULL	3L	// VAR_SPECIAL
 
 // Type values for type().
 #define VAR_TYPE_NUMBER	    0

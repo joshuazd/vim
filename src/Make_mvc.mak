@@ -33,7 +33,7 @@
 #
 #	OLE interface: OLE=yes (usually with GUI=yes)
 #
-#	IME support: IME=yes	(requires GUI=yes)
+#	IME support: IME=yes	(default is yes)
 #	  DYNAMIC_IME=[yes or no]  (to load the imm32.dll dynamically, default
 #	  is yes)
 #	Global IME support: GIME=yes (requires GUI=yes)
@@ -812,6 +812,9 @@ OLE_IDL = if_ole.idl
 OLE_LIB = oleaut32.lib
 !endif
 
+!ifndef IME
+IME = yes
+!endif
 !if "$(IME)" == "yes"
 CFLAGS = $(CFLAGS) -DFEAT_MBYTE_IME
 ! ifndef DYNAMIC_IME
@@ -1417,7 +1420,7 @@ clean: testclean
 # If this fails because you don't have Vim yet, first build and install Vim
 # without changes.
 cmdidxs: ex_cmds.h
-	vim --clean -X -u create_cmdidxs.vim
+	vim --clean -X --not-a-term -u create_cmdidxs.vim
 
 test:
 	cd testdir

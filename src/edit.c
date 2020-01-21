@@ -4942,7 +4942,7 @@ bracketed_paste(paste_mode_T mode, int drop, garray_T *gap)
     int		save_paste = p_paste;
 
     // If the end code is too long we can't detect it, read everything.
-    if (STRLEN(end) >= NUMBUFLEN)
+    if (end != NULL && STRLEN(end) >= NUMBUFLEN)
 	end = NULL;
     ++no_mapping;
     allow_keys = 0;
@@ -4959,9 +4959,9 @@ bracketed_paste(paste_mode_T mode, int drop, garray_T *gap)
 	do
 	    c = vgetc();
 	while (c == K_IGNORE || c == K_VER_SCROLLBAR || c == K_HOR_SCROLLBAR);
-	if (c == NUL || got_int)
+	if (c == NUL || got_int || (ex_normal_busy > 0 && c == Ctrl_C))
 	    // When CTRL-C was encountered the typeahead will be flushed and we
-	    // won't get the end sequence.
+	    // won't get the end sequence.  Except when using ":normal".
 	    break;
 
 	if (has_mbyte)
@@ -5604,9 +5604,25 @@ ins_tab(void)
 #ifdef FEAT_PROP_POPUP
 		if (!(State & VREPLACE_FLAG))
 		{
-		    mch_memmove(ptr, ptr + i, curbuf->b_ml.ml_line_len - i
-					   - (ptr - curbuf->b_ml.ml_line_ptr));
+		    char_u  *newp;
+		    int	    col;
+
+		    newp = alloc(curbuf->b_ml.ml_line_len - i);
+		    if (newp == NULL)
+			return FALSE;
+
+		    col = ptr - curbuf->b_ml.ml_line_ptr;
+		    if (col > 0)
+			mch_memmove(newp, ptr - col, col);
+		    mch_memmove(newp + col, ptr + i,
+					   curbuf->b_ml.ml_line_len - col - i);
+
+		    if (curbuf->b_ml.ml_flags & ML_LINE_DIRTY)
+			vim_free(curbuf->b_ml.ml_line_ptr);
+		    curbuf->b_ml.ml_line_ptr = newp;
 		    curbuf->b_ml.ml_line_len -= i;
+		    curbuf->b_ml.ml_flags =
+			   (curbuf->b_ml.ml_flags | ML_LINE_DIRTY) & ~ML_EMPTY;
 		}
 		else
 #endif
