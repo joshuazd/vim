@@ -2263,7 +2263,10 @@ channel_get_json(
     while (item != NULL)
     {
 	list_T	    *l = item->jq_value->vval.v_list;
-	typval_T    *tv = &l->lv_first->li_tv;
+	typval_T    *tv;
+
+	range_list_materialize(l);
+	tv = &l->lv_first->li_tv;
 
 	if ((without_callback || !item->jq_no_callback)
 	    && ((id > 0 && tv->v_type == VAR_NUMBER && tv->vval.v_number == id)
@@ -5993,7 +5996,7 @@ theend:
 #ifndef USE_ARGV
     vim_free(ga.ga_data);
 #endif
-    if (argv != job->jv_argv)
+    if (argv != NULL && argv != job->jv_argv)
     {
 	for (i = 0; argv[i] != NULL; i++)
 	    vim_free(argv[i]);
