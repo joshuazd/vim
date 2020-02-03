@@ -1060,6 +1060,8 @@ call_user_func(
     if (fp->uf_dfunc_idx >= 0)
     {
 	estack_push_ufunc(ETYPE_UFUNC, fp, 1);
+	save_current_sctx = current_sctx;
+	current_sctx = fp->uf_script_ctx;
 
 	// Execute the compiled function.
 	call_def_function(fp, argcount, argvars, rettv);
@@ -1067,6 +1069,7 @@ call_user_func(
 	current_funccal = fc->caller;
 
 	estack_pop();
+	current_sctx = save_current_sctx;
 	free_funccal(fc);
 	return;
     }
@@ -1600,13 +1603,14 @@ func_call(
     dict_T	*selfdict,
     typval_T	*rettv)
 {
+    list_T	*l = args->vval.v_list;
     listitem_T	*item;
     typval_T	argv[MAX_FUNC_ARGS + 1];
     int		argc = 0;
     int		r = 0;
 
-    for (item = args->vval.v_list->lv_first; item != NULL;
-							 item = item->li_next)
+    range_list_materialize(l);
+    for (item = l->lv_first; item != NULL; item = item->li_next)
     {
 	if (argc == MAX_FUNC_ARGS - (partial == NULL ? 0 : partial->pt_argc))
 	{
@@ -2187,7 +2191,7 @@ trans_function_name(
     name = alloc(len + lead + extra + 1);
     if (name != NULL)
     {
-	if (lead > 0 || vim9script)
+	if (!skip && (lead > 0 || vim9script))
 	{
 	    name[0] = K_SPECIAL;
 	    name[1] = KS_EXTRA;
@@ -2690,9 +2694,10 @@ ex_function(exarg_T *eap)
 		}
 	    }
 
-	    // Check for ":append", ":change", ":insert".
+	    // Check for ":append", ":change", ":insert".  Not for :def.
 	    p = skip_range(p, NULL);
-	    if ((p[0] == 'a' && (!ASCII_ISALPHA(p[1]) || p[1] == 'p'))
+	    if (eap->cmdidx != CMD_def
+		&& ((p[0] == 'a' && (!ASCII_ISALPHA(p[1]) || p[1] == 'p'))
 		    || (p[0] == 'c'
 			&& (!ASCII_ISALPHA(p[1]) || (p[1] == 'h'
 				&& (!ASCII_ISALPHA(p[2]) || (p[2] == 'a'
@@ -2700,7 +2705,10 @@ ex_function(exarg_T *eap)
 					    || !ASCII_ISALPHA(p[6])))))))
 		    || (p[0] == 'i'
 			&& (!ASCII_ISALPHA(p[1]) || (p[1] == 'n'
-				&& (!ASCII_ISALPHA(p[2]) || (p[2] == 's'))))))
+				&& (!ASCII_ISALPHA(p[2])
+				    || (p[2] == 's'
+					&& (!ASCII_ISALPHA(p[3])
+						|| p[3] == 'e'))))))))
 		skip_until = vim_strsave((char_u *)".");
 
 	    // Check for ":python <<EOF", ":tcl <<EOF", etc.
