@@ -2360,7 +2360,12 @@ f_popup_close(typval_T *argvars, typval_T *rettv UNUSED)
     int		id = (int)tv_get_number(argvars);
     win_T	*wp;
 
-    if (ERROR_IF_ANY_POPUP_WINDOW)
+    if (
+# ifdef FEAT_TERMINAL
+	// if the popup contains a terminal it will become hidden
+	curbuf->b_term == NULL &&
+# endif
+	    ERROR_IF_ANY_POPUP_WINDOW)
 	return;
 
     wp = find_popup_win(id);
@@ -2371,6 +2376,10 @@ f_popup_close(typval_T *argvars, typval_T *rettv UNUSED)
     void
 popup_hide(win_T *wp)
 {
+#ifdef FEAT_TERMINAL
+    if (error_if_term_popup_window())
+	return;
+#endif
     if ((wp->w_popup_flags & POPF_HIDDEN) == 0)
     {
 	wp->w_popup_flags |= POPF_HIDDEN;
@@ -2873,7 +2882,7 @@ error_if_term_popup_window()
     if (WIN_IS_POPUP(curwin) && curbuf->b_term != NULL
 					   && term_job_running(curbuf->b_term))
     {
-	emsg(_("E899: Not allowed for a terminal in a popup window"));
+	emsg(_("E863: Not allowed for a terminal in a popup window"));
 	return TRUE;
     }
     return FALSE;

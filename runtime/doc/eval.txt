@@ -1,4 +1,4 @@
-*eval.txt*	For Vim version 8.2.  Last change: 2020 Jan 19
+*eval.txt*	For Vim version 8.2.  Last change: 2020 Feb 14
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -48,8 +48,7 @@ There are ten types of variables:
 
 							*Number* *Integer*
 Number		A 32 or 64 bit signed number.  |expr-number|
-		64-bit Numbers are available only when compiled with the
-		|+num64| feature.
+		The number of bits is available in |v:numbersize|.
 		Examples:  -123  0x10  0177  0b1011
 
 Float		A floating point number. |floating-point-format| *Float*
@@ -1808,7 +1807,9 @@ v:errors	Errors found by assert functions, such as |assert_true()|.
 
 					*v:event* *event-variable*
 v:event		Dictionary containing information about the current
-		|autocommand|.  The dictionary is emptied when the |autocommand|
+		|autocommand|.  See the specific event for what it puts in
+		this dictionary.
+		The dictionary is emptied when the |autocommand|
 		finishes, please refer to |dict-identity| for how to get an
 		independent copy of it.
 
@@ -1988,6 +1989,10 @@ v:null		An empty String. Used to put "null" in JSON.  See
 <			v:null ~
 		That is so that eval() can parse the string back to the same
 		value.  Read-only.
+
+					*v:numbersize* *numbersize-variable*
+v:numbersize	Number of bits in a Number.  This is normally 64, but on some
+		systems it my be 32.
 
 					*v:oldfiles* *oldfiles-variable*
 v:oldfiles	List of file names that is loaded from the |viminfo| file on
@@ -2412,6 +2417,7 @@ deletebufline({expr}, {first} [, {last}])
 did_filetype()			Number	|TRUE| if FileType autocmd event used
 diff_filler({lnum})		Number	diff filler lines about {lnum}
 diff_hlID({lnum}, {col})	Number	diff highlighting at {lnum}/{col}
+echoraw({expr})			none	output {expr} as-is
 empty({expr})			Number	|TRUE| if {expr} is empty
 environ()			Dict	return environment variables
 escape({string}, {chars})	String	escape {chars} in {string} with '\'
@@ -2858,12 +2864,15 @@ test_null_job()			Job	null value for testing
 test_null_list()		List	null value for testing
 test_null_partial()		Funcref	null value for testing
 test_null_string()		String	null value for testing
+test_unknown()			any	unknown value for testing
+test_void()			any	void value for testing
 test_option_not_set({name})	none	reset flag indicating option was set
 test_override({expr}, {val})	none	test with Vim internal overrides
 test_refcount({expr})		Number	get the reference count of {expr}
 test_scrollbar({which}, {value}, {dragging})
 				none	scroll in the GUI for testing
 test_setmouse({row}, {col})	none	set the mouse position for testing
+test_srand_seed([seed])		none	set seed for testing srand()
 test_settime({expr})		none	set current time for testing
 timer_info([{id}])		List	information about timers
 timer_pause({id}, {pause})	none	pause or unpause a timer
@@ -2896,6 +2905,7 @@ win_id2win({expr})		Number	get window nr from window ID
 win_screenpos({nr})		List	get screen position of window {nr}
 win_splitmove({nr}, {target} [, {options}])
 				Number	move window {nr} to split of {target}
+win_type([{nr}])		String	type of window {nr}
 winbufnr({nr})			Number	buffer number of window {nr}
 wincol()			Number	window column of the cursor
 winheight({nr})			Number	height of window {nr}
@@ -3455,6 +3465,7 @@ chdir({dir})						*chdir()*
 			  directory (|:tcd|) then changes the tabpage local
 			  directory.
 			- Otherwise, changes the global directory.
+		{dir} must be a String.
 		If successful, returns the previous working directory.  Pass
 		this to another chdir() to restore the directory.
 		On failure, returns an empty string.
@@ -3939,6 +3950,17 @@ diff_hlID({lnum}, {col})				*diff_hlID()*
 
 		Can also be used as a |method|: >
 			GetLnum()->diff_hlID(col)
+
+
+echoraw({expr})						*echoraw()*
+		Output {expr} as-is, including unprintable characters.  This
+		can be used to output a terminal code. For example, to disable
+		modifyOtherKeys: >
+			call echoraw(&t_TE)
+<		and to enable it again: >
+			call echoraw(&t_TI)
+<		Use with care, you can mess up the terminal this way.
+
 
 empty({expr})						*empty()*
 		Return the Number 1 if {expr} is empty, zero otherwise.
@@ -5664,7 +5686,7 @@ getwininfo([{winid}])					*getwininfo()*
 			GetWinnr()->getwininfo()
 
 getwinpos([{timeout}])					*getwinpos()*
-		The result is a list with two numbers, the result of
+		The result is a List with two numbers, the result of
 		|getwinposx()| and |getwinposy()| combined:
 			[x-pos, y-pos]
 		{timeout} can be used to specify how long to wait in msec for
@@ -10324,6 +10346,23 @@ win_getid([{win} [, {tab}]])				*win_getid()*
 		Can also be used as a |method|: >
 			GetWinnr()->win_getid()
 
+
+win_gettype([{nr}])					*win_gettype()*
+		Return the type of the window:
+			"popup"		popup window |popup|
+			"command"	command-line window |cmdwin|
+			(empty)		normal window
+			"unknown"	window {nr} not found
+
+		When {nr} is omitted return the type of the current window.
+		When {nr} is given return the type of this window by number or
+		|window-ID|.
+
+		Also see the 'buftype' option.  When running a terminal in a
+		popup window then 'buftype' is "terminal" and win_gettype()
+		returns "popup".
+
+
 win_gotoid({expr})					*win_gotoid()*
 		Go to window with ID {expr}.  This may also change the current
 		tabpage.
@@ -10381,6 +10420,7 @@ win_splitmove({nr}, {target} [, {options}])		*win_splitmove()*
 		Can also be used as a |method|: >
 			GetWinid()->win_splitmove(target)
 <
+
 							*winbufnr()*
 winbufnr({nr})	The result is a Number, which is the number of the buffer
 		associated with window {nr}.  {nr} can be the window number or
@@ -10461,6 +10501,7 @@ winline()	The result is a Number, which is the screen line of the cursor
 							*winnr()*
 winnr([{arg}])	The result is a Number, which is the number of the current
 		window.  The top window has number 1.
+		Returns zero for a popup window.
 
 		The optional argument {arg} supports the following values:
 			$	the number of the last window (the window

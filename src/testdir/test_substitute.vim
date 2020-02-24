@@ -1,5 +1,7 @@
 " Tests for multi-line regexps with ":s".
 
+source shared.vim
+
 func Test_multiline_subst()
   enew!
   call append(0, ["1 aa",
@@ -801,6 +803,36 @@ func Test_sub_expand_text()
   s/b/\=repeat('B', 10)/g
   call assert_equal(repeat('aBBBBBBBBBBc', 8), getline(1))
   close!
+endfunc
+
+" Test for command failures when the last substitute pattern is not set.
+func Test_sub_with_no_last_pat()
+  let lines =<< trim [SCRIPT]
+    call assert_fails('~', 'E33:')
+    call assert_fails('s//abc/g', 'E476:')
+    call assert_fails('s\/bar', 'E476:')
+    call assert_fails('s\&bar&', 'E476:')
+    call writefile(v:errors, 'Xresult')
+    qall!
+  [SCRIPT]
+  call writefile(lines, 'Xscript')
+  if RunVim([], [], '--clean -S Xscript')
+    call assert_equal([], readfile('Xresult'))
+  endif
+
+  let lines =<< trim [SCRIPT]
+    set cpo+=/
+    call assert_fails('s/abc/%/', 'E33:')
+    call writefile(v:errors, 'Xresult')
+    qall!
+  [SCRIPT]
+  call writefile(lines, 'Xscript')
+  if RunVim([], [], '--clean -S Xscript')
+    call assert_equal([], readfile('Xresult'))
+  endif
+
+  call delete('Xscript')
+  call delete('Xresult')
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

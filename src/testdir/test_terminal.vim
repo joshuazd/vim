@@ -781,7 +781,8 @@ func Test_terminal_special_chars()
   call writefile(['x'], 'Xdir with spaces/quoted"file')
   term ls Xdir\ with\ spaces/quoted\"file
   call WaitForAssert({-> assert_match('quoted"file', term_getline('', 1))})
-  call term_wait('')
+  " make sure the job has finished
+  call WaitForAssert({-> assert_match('finish', term_getstatus(bufnr()))})
 
   call delete('Xdir with spaces', 'rf')
   bwipe
@@ -2333,19 +2334,34 @@ func Test_terminal_in_popup()
   call writefile(text, 'Xtext')
   let cmd = GetVimCommandCleanTerm()
   let lines = [
+	\ 'set t_u7=',
 	\ 'call setline(1, range(20))',
 	\ 'hi PopTerm ctermbg=grey',
 	\ 'func OpenTerm(setColor)',
-	\ "  let buf = term_start('" .. cmd .. " Xtext', #{hidden: 1, term_finish: 'close'})",
-	\ '  let winid = popup_create(buf, #{minwidth: 45, minheight: 7, border: [], drag: 1, resize: 1})',
+	\ "  let s:buf = term_start('" .. cmd .. " Xtext', #{hidden: 1, term_finish: 'close'})",
+	\ '  let s:winid = popup_create(s:buf, #{minwidth: 45, minheight: 7, border: [], drag: 1, resize: 1})',
 	\ '  if a:setColor',
-	\ '    call win_execute(winid, "set wincolor=PopTerm")',
+	\ '    call win_execute(s:winid, "set wincolor=PopTerm")',
 	\ '  endif',
 	\ 'endfunc',
 	\ 'call OpenTerm(0)',
+	\ 'func HidePopup()',
+	\ '  call popup_hide(s:winid)',
+	\ 'endfunc',
+	\ 'func ClosePopup()',
+	\ '  call popup_close(s:winid)',
+	\ 'endfunc',
+	\ 'func ReopenPopup()',
+	\ '  call popup_create(s:buf, #{minwidth: 40, minheight: 6, border: []})',
+	\ 'endfunc',
+	\ 'sleep 10m',
+	\ 'redraw',
+	\ 'echo getwinvar(s:winid, "&buftype") win_gettype(s:winid)',
 	\ ]
   call writefile(lines, 'XtermPopup')
   let buf = RunVimInTerminal('-S XtermPopup', #{rows: 15})
+  call term_wait(buf, 100)
+  call term_sendkeys(buf, ":\<CR>")
   call VerifyScreenDump(buf, 'Test_terminal_popup_1', {})
 
   call term_sendkeys(buf, ":q\<CR>")
@@ -2356,9 +2372,36 @@ func Test_terminal_in_popup()
   call term_sendkeys(buf, "/edit\<CR>")
   call VerifyScreenDump(buf, 'Test_terminal_popup_3', {})
  
+  call term_sendkeys(buf, "\<C-W>:call HidePopup()\<CR>")
+  call VerifyScreenDump(buf, 'Test_terminal_popup_4', {})
+  call term_sendkeys(buf, "\<CR>")
+  call term_wait(buf, 100)
+
+  call term_sendkeys(buf, "\<C-W>:call ClosePopup()\<CR>")
+  call VerifyScreenDump(buf, 'Test_terminal_popup_5', {})
+
+  call term_sendkeys(buf, "\<C-W>:call ReopenPopup()\<CR>")
+  call VerifyScreenDump(buf, 'Test_terminal_popup_6', {})
+  call term_wait(buf, 100)
+
   call term_sendkeys(buf, ":q\<CR>")
   call term_wait(buf, 100)  " wait for terminal to vanish
 
   call StopVimInTerminal(buf)
   call delete('XtermPopup')
+endfunc
+
+func Test_issue_5607()
+  let wincount = winnr('$')
+  exe 'terminal' &shell &shellcmdflag 'exit'
+  let job = term_getjob(bufnr())
+  call WaitForAssert({-> assert_equal("dead", job_status(job))})
+
+  let old_wincolor = &wincolor
+  try
+    set wincolor=
+  finally
+    let &wincolor = old_wincolor
+    bw!
+  endtry
 endfunc
