@@ -103,6 +103,7 @@
 #if defined(FEAT_GUI_MOTIF) \
     || defined(FEAT_GUI_GTK) \
     || defined(FEAT_GUI_ATHENA) \
+    || defined(FEAT_GUI_HAIKU) \
     || defined(FEAT_GUI_MAC) \
     || defined(FEAT_GUI_MSWIN) \
     || defined(FEAT_GUI_PHOTON)
@@ -219,8 +220,9 @@
 # include <clib/exec_protos.h>
 #endif
 
-#ifdef __BEOS__
-# include "os_beos.h"
+#ifdef __HAIKU__
+# include "os_haiku.h"
+# define __ARGS(x)  x
 #endif
 
 #if (defined(UNIX) || defined(VMS)) \
@@ -310,11 +312,12 @@
 #define NUMBUFLEN 65
 
 // flags for vim_str2nr()
-#define STR2NR_BIN 0x01
-#define STR2NR_OCT 0x02
-#define STR2NR_HEX 0x04
-#define STR2NR_ALL (STR2NR_BIN + STR2NR_OCT + STR2NR_HEX)
-#define STR2NR_NO_OCT (STR2NR_BIN + STR2NR_HEX)
+#define STR2NR_BIN  0x01
+#define STR2NR_OCT  0x02
+#define STR2NR_HEX  0x04
+#define STR2NR_OOCT 0x08    // Octal with prefix "0o": 0o777
+#define STR2NR_ALL (STR2NR_BIN + STR2NR_OCT + STR2NR_HEX + STR2NR_OOCT)
+#define STR2NR_NO_OCT (STR2NR_BIN + STR2NR_HEX + STR2NR_OOCT)
 
 #define STR2NR_FORCE 0x80   // only when ONE of the above is used
 
@@ -334,9 +337,9 @@ typedef unsigned int	int_u;
 #ifdef _WIN64
 typedef unsigned __int64	long_u;
 typedef		 __int64	long_i;
-# define SCANF_HEX_LONG_U       "%Ix"
-# define SCANF_DECIMAL_LONG_U   "%Iu"
-# define PRINTF_HEX_LONG_U      "0x%Ix"
+# define SCANF_HEX_LONG_U       "%llx"
+# define SCANF_DECIMAL_LONG_U   "%llu"
+# define PRINTF_HEX_LONG_U      "0x%llx"
 #else
   // Microsoft-specific. The __w64 keyword should be specified on any typedefs
   // that change size between 32-bit and 64-bit platforms.  For any such type,
@@ -633,12 +636,6 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define POPUP_HANDLED_3	    0x04    // used by popup_check_cursor_pos()
 #define POPUP_HANDLED_4	    0x08    // used by may_update_popup_mask()
 #define POPUP_HANDLED_5	    0x10    // used by update_popups()
-
-#ifdef FEAT_PROP_POPUP
-# define WIN_IS_POPUP(wp) ((wp)->w_popup_flags != 0)
-#else
-# define WIN_IS_POPUP(wp) 0
-#endif
 
 /*
  * Terminal highlighting attribute bits.
@@ -1319,6 +1316,7 @@ enum auto_event
     EVENT_SESSIONLOADPOST,	// after loading a session file
     EVENT_SHELLCMDPOST,		// after ":!cmd"
     EVENT_SHELLFILTERPOST,	// after ":1,2!cmd", ":w !cmd", ":r !cmd".
+    EVENT_SIGUSR1,		// after the SIGUSR1 signal
     EVENT_SOURCECMD,		// sourcing a Vim script using command
     EVENT_SOURCEPRE,		// before sourcing a Vim script
     EVENT_SOURCEPOST,		// after sourcing a Vim script
@@ -1575,6 +1573,14 @@ typedef UINT32_TYPEDEF UINT32_T;
 #define LALLOC_CLEAR_MULT(type, count)  (type *)lalloc_clear(sizeof(type) * (count), FALSE)
 #define LALLOC_MULT(type, count)  (type *)lalloc(sizeof(type) * (count), FALSE)
 
+#ifdef HAVE_MEMSET
+# define vim_memset(ptr, c, size)   memset((ptr), (c), (size))
+#else
+void *vim_memset(void *, int, size_t);
+#endif
+#define CLEAR_FIELD(field)  vim_memset(&(field), 0, sizeof(field))
+#define CLEAR_POINTER(ptr)  vim_memset((ptr), 0, sizeof(*(ptr)))
+
 /*
  * defines to avoid typecasts from (char_u *) to (char *) and back
  * (vim_strchr() and vim_strrchr() are now in alloc.c)
@@ -1708,12 +1714,6 @@ typedef void	    *vim_acl_T;		// dummy to pass an ACL to a function
 #define fnamecmp(x, y) vim_fnamecmp((char_u *)(x), (char_u *)(y))
 #define fnamencmp(x, y, n) vim_fnamencmp((char_u *)(x), (char_u *)(y), (size_t)(n))
 
-#ifdef HAVE_MEMSET
-# define vim_memset(ptr, c, size)   memset((ptr), (c), (size))
-#else
-void *vim_memset(void *, int, size_t);
-#endif
-
 #if defined(UNIX) || defined(FEAT_GUI) || defined(VMS) \
 	|| defined(FEAT_CLIENTSERVER)
 # define USE_INPUT_BUF
@@ -1751,6 +1751,7 @@ void *vim_memset(void *, int, size_t);
 # define INIT3(a, b, c)
 # define INIT4(a, b, c, d)
 # define INIT5(a, b, c, d, e)
+# define INIT6(a, b, c, d, e, f)
 #else
 # ifndef INIT
 #  define INIT(x) x
@@ -1758,6 +1759,7 @@ void *vim_memset(void *, int, size_t);
 #  define INIT3(a, b, c) = {a, b, c}
 #  define INIT4(a, b, c, d) = {a, b, c, d}
 #  define INIT5(a, b, c, d, e) = {a, b, c, d, e}
+#  define INIT6(a, b, c, d, e, f) = {a, b, c, d, e, f}
 #  define DO_INIT
 # endif
 #endif
@@ -2075,6 +2077,9 @@ typedef struct
     int_u	format;		// Vim's own special clipboard format
     int_u	format_raw;	// Vim's raw text clipboard format
 # endif
+# ifdef FEAT_GUI_HAIKU
+    // No clipboard at the moment. TODO?
+# endif
 } Clipboard_T;
 #else
 typedef int Clipboard_T;	// This is required for the prototypes.
@@ -2136,7 +2141,7 @@ typedef enum {
 // functions of these names. The declarations would break if the defines had
 // been seen at that stage.  But it must be before globals.h, where error_ga
 // is declared.
-#if !defined(MSWIN) && !defined(FEAT_GUI_X11) \
+#if !defined(MSWIN) && !defined(FEAT_GUI_X11) && !defined(FEAT_GUI_HAIKU) \
 	&& !defined(FEAT_GUI_GTK) && !defined(FEAT_GUI_MAC) && !defined(PROTO)
 # define mch_errmsg(str)	fprintf(stderr, "%s", (str))
 # define display_errors()	fflush(stderr)
@@ -2653,5 +2658,15 @@ long elapsed(DWORD start_tick);
 #define REPTERM_DO_LT		2
 #define REPTERM_SPECIAL		4
 #define REPTERM_NO_SIMPLIFY	8
+
+// Flags for expression evaluation.
+#define EVAL_EVALUATE	    1	    // when missing don't actually evaluate
+#define EVAL_CONSTANT	    2	    // when not a constant return FAIL
+
+// Flags for find_special_key()
+#define FSK_KEYCODE	0x01	// prefer key code, e.g. K_DEL instead of DEL
+#define FSK_KEEP_X_KEY	0x02	// don't translate xHome to Home key
+#define FSK_IN_STRING	0x04	// TRUE in string, double quote is escaped
+#define FSK_SIMPLIFY	0x08	// simplify <C-H> and <A-x>
 
 #endif // VIM__H
