@@ -1729,7 +1729,14 @@ do_one_cmd(
 
 #ifdef FEAT_EVAL
     if (current_sctx.sc_version == SCRIPT_VERSION_VIM9 && !starts_with_colon)
+    {
+	if (ea.cmd > cmd)
+	{
+	    emsg(_(e_colon_required));
+	    goto doend;
+	}
 	p = find_ex_command(&ea, NULL, lookup_scriptvar, NULL);
+    }
     else
 #endif
 	p = find_ex_command(&ea, NULL, NULL, NULL);
@@ -1895,7 +1902,7 @@ do_one_cmd(
 	p = ea.cmd;
 	while (ASCII_ISALNUM(*p))
 	    ++p;
-	p = vim_strnsave(ea.cmd, (int)(p - ea.cmd));
+	p = vim_strnsave(ea.cmd, p - ea.cmd);
 	ret = apply_autocmds(EVENT_CMDUNDEFINED, p, p, TRUE, NULL);
 	vim_free(p);
 	// If the autocommands did something and didn't cause an error, try
@@ -3446,7 +3453,7 @@ excmd_get_argt(cmdidx_T idx)
  * Backslashed delimiters after / or ? will be skipped, and commands will
  * not be expanded between /'s and ?'s or after "'".
  *
- * Also skip white space and ":" characters.
+ * Also skip white space and ":" characters after the range.
  * Returns the "cmd" pointer advanced to beyond the range.
  */
     char_u *
@@ -6215,6 +6222,7 @@ do_exedit(
 						|| eap->cmdidx == CMD_view))
     {
 	exmode_active = FALSE;
+	ex_pressedreturn = FALSE;
 	if (*eap->arg == NUL)
 	{
 	    // Special case:  ":global/pat/visual\NLvi-commands"

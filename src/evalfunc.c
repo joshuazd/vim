@@ -339,6 +339,14 @@ ret_job(int argcount UNUSED, type_T **argtypes UNUSED)
     return &t_job;
 }
 
+    static type_T *
+ret_first_arg(int argcount, type_T **argtypes)
+{
+    if (argcount > 0)
+	return argtypes[0];
+    return &t_void;
+}
+
 static type_T *ret_f_function(int argcount, type_T **argtypes);
 
 /*
@@ -769,8 +777,8 @@ static funcentry_T global_functions[] =
 			},
     {"rand",		0, 1, FEARG_1,	  ret_number,	f_rand},
     {"range",		1, 3, FEARG_1,	  ret_list_number, f_range},
-    {"readdir",		1, 2, FEARG_1,	  ret_list_string, f_readdir},
-    {"readdirex",	1, 2, FEARG_1,	  ret_list_dict_any, f_readdirex},
+    {"readdir",		1, 3, FEARG_1,	  ret_list_string, f_readdir},
+    {"readdirex",	1, 3, FEARG_1,	  ret_list_dict_any, f_readdirex},
     {"readfile",	1, 3, FEARG_1,	  ret_any,	f_readfile},
     {"reduce",		2, 3, FEARG_1,	  ret_any,	f_reduce},
     {"reg_executing",	0, 0, 0,	  ret_string,	f_reg_executing},
@@ -849,7 +857,7 @@ static funcentry_T global_functions[] =
     {"simplify",	1, 1, FEARG_1,	  ret_string,	f_simplify},
     {"sin",		1, 1, FEARG_1,	  ret_float,	FLOAT_FUNC(f_sin)},
     {"sinh",		1, 1, FEARG_1,	  ret_float,	FLOAT_FUNC(f_sinh)},
-    {"sort",		1, 3, FEARG_1,	  ret_list_any,	f_sort},
+    {"sort",		1, 3, FEARG_1,	  ret_first_arg, f_sort},
     {"sound_clear",	0, 0, 0,	  ret_void,	SOUND_FUNC(f_sound_clear)},
     {"sound_playevent",	1, 2, FEARG_1,	  ret_number,	SOUND_FUNC(f_sound_playevent)},
     {"sound_playfile",	1, 2, FEARG_1,	  ret_number,	SOUND_FUNC(f_sound_playfile)},
@@ -944,6 +952,7 @@ static funcentry_T global_functions[] =
     {"term_setsize",	3, 3, FEARG_1,	  ret_void,	TERM_FUNC(f_term_setsize)},
     {"term_start",	1, 2, FEARG_1,	  ret_number,	TERM_FUNC(f_term_start)},
     {"term_wait",	1, 2, FEARG_1,	  ret_void,	TERM_FUNC(f_term_wait)},
+    {"terminalprops",	0, 0, 0,	  ret_dict_string, f_terminalprops},
     {"test_alloc_fail",	3, 3, FEARG_1,	  ret_void,	f_test_alloc_fail},
     {"test_autochdir",	0, 0, 0,	  ret_void,	f_test_autochdir},
     {"test_feedinput",	1, 1, FEARG_1,	  ret_void,	f_test_feedinput},
@@ -5993,11 +6002,11 @@ static int	srand_seed_for_testing_is_used = FALSE;
 f_test_srand_seed(typval_T *argvars, typval_T *rettv UNUSED)
 {
     if (argvars[0].v_type == VAR_UNKNOWN)
-        srand_seed_for_testing_is_used = FALSE;
+	srand_seed_for_testing_is_used = FALSE;
     else
     {
-        srand_seed_for_testing = (UINT32_T)tv_get_number(&argvars[0]);
-        srand_seed_for_testing_is_used = TRUE;
+	srand_seed_for_testing = (UINT32_T)tv_get_number(&argvars[0]);
+	srand_seed_for_testing_is_used = TRUE;
     }
 }
 
@@ -6010,7 +6019,7 @@ init_srand(UINT32_T *x)
 
     if (srand_seed_for_testing_is_used)
     {
-        *x = srand_seed_for_testing;
+	*x = srand_seed_for_testing;
 	return;
     }
 #ifndef MSWIN
@@ -7260,6 +7269,37 @@ f_setpos(typval_T *argvars, typval_T *rettv)
 }
 
 /*
+ * Translate a register type string to the yank type and block length
+ */
+    static int
+get_yank_type(char_u **pp, char_u *yank_type, long *block_len)
+{
+    char_u *stropt = *pp;
+    switch (*stropt)
+    {
+	case 'v': case 'c':	// character-wise selection
+	    *yank_type = MCHAR;
+	    break;
+	case 'V': case 'l':	// line-wise selection
+	    *yank_type = MLINE;
+	    break;
+	case 'b': case Ctrl_V:	// block-wise selection
+	    *yank_type = MBLOCK;
+	    if (VIM_ISDIGIT(stropt[1]))
+	    {
+		++stropt;
+		*block_len = getdigits(&stropt) - 1;
+		--stropt;
+	    }
+	    break;
+	default:
+	    return FAIL;
+    }
+    *pp = stropt;
+    return OK;
+}
+
+/*
  * "setreg()" function
  */
     static void
@@ -7293,30 +7333,31 @@ f_setreg(typval_T *argvars, typval_T *rettv)
     if (argvars[1].v_type == VAR_DICT)
     {
 	dict_T	    *d = argvars[1].vval.v_dict;
-	dictitem_T  *di = dict_find(d, (char_u *)"regcontents", -1);
+	dictitem_T  *di;
+
+	if (d == NULL || d->dv_hashtab.ht_used == 0)
+	{
+	    // Empty dict, clear the register (like setreg(0, []))
+	    char_u *lstval[2] = {NULL, NULL};
+	    write_reg_contents_lst(regname, lstval, 0, FALSE, MAUTO, -1);
+	    return;
+	}
+
+	di = dict_find(d, (char_u *)"regcontents", -1);
 	if (di != NULL)
 	    regcontents = &di->di_tv;
 
 	stropt = dict_get_string(d, (char_u *)"regtype", FALSE);
 	if (stropt != NULL)
-	    switch (*stropt)
+	{
+	    int ret = get_yank_type(&stropt, &yank_type, &block_len);
+
+	    if (ret == FAIL || *++stropt != NUL)
 	    {
-		case 'v':		// character-wise selection
-		    yank_type = MCHAR;
-		    break;
-		case 'V':		// line-wise selection
-		    yank_type = MLINE;
-		    break;
-		case Ctrl_V:		// block-wise selection
-		    yank_type = MBLOCK;
-		    if (VIM_ISDIGIT(stropt[1]))
-		    {
-			++stropt;
-			block_len = getdigits(&stropt) - 1;
-			--stropt;
-		    }
-		    break;
+		semsg(_(e_invargval), "value");
+		return;
 	    }
+	}
 
 	if (regname == '"')
 	{
@@ -7335,6 +7376,12 @@ f_setreg(typval_T *argvars, typval_T *rettv)
 
     if (argvars[2].v_type != VAR_UNKNOWN)
     {
+	if (yank_type != MAUTO)
+	{
+	    semsg(_(e_toomanyarg), "setreg");
+	    return;
+	}
+
 	stropt = tv_get_string_chk(&argvars[2]);
 	if (stropt == NULL)
 	    return;		// type error
@@ -7344,21 +7391,8 @@ f_setreg(typval_T *argvars, typval_T *rettv)
 		case 'a': case 'A':	// append
 		    append = TRUE;
 		    break;
-		case 'v': case 'c':	// character-wise selection
-		    yank_type = MCHAR;
-		    break;
-		case 'V': case 'l':	// line-wise selection
-		    yank_type = MLINE;
-		    break;
-		case 'b': case Ctrl_V:	// block-wise selection
-		    yank_type = MBLOCK;
-		    if (VIM_ISDIGIT(stropt[1]))
-		    {
-			++stropt;
-			block_len = getdigits(&stropt) - 1;
-			--stropt;
-		    }
-		    break;
+		default:
+		    get_yank_type(&stropt, &yank_type, &block_len);
 	    }
     }
 
