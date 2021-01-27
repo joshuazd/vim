@@ -615,7 +615,7 @@ wingotofile:
 #ifdef FEAT_SEARCHPATH
 		    case 'f':	    // CTRL-W gf: "gf" in a new tab page
 		    case 'F':	    // CTRL-W gF: "gF" in a new tab page
-			cmdmod.tab = tabpage_index(curtab) + 1;
+			cmdmod.cmod_tab = tabpage_index(curtab) + 1;
 			nchar = xchar;
 			goto wingotofile;
 #endif
@@ -625,6 +625,11 @@ wingotofile:
 
 		    case 'T':	    // CTRL-W gT: go to previous tab page
 			goto_tabpage(-(int)Prenum1);
+			break;
+
+		    case TAB:	    // CTRL-W g<Tab>: go to last used tab page
+			if (goto_tabpage_lastused() == FAIL)
+			    beep_flush();
 			break;
 
 		    default:
@@ -793,7 +798,7 @@ win_split(int size, int flags)
 	return OK;
 
     // Add flags from ":vertical", ":topleft" and ":botright".
-    flags |= cmdmod.split;
+    flags |= cmdmod.cmod_split;
     if ((flags & WSP_TOP) && (flags & WSP_BOT))
     {
 	emsg(_("E442: Can't split topleft and botright at the same time"));
@@ -1268,13 +1273,11 @@ win_split_ins(
     if (flags & (WSP_TOP | WSP_BOT))
 	(void)win_comp_pos();
 
-    /*
-     * Both windows need redrawing
-     */
+     // Both windows need redrawing.  Update all status lines, in case they
+     // show something related to the window count or position.
     redraw_win_later(wp, NOT_VALID);
-    wp->w_redr_status = TRUE;
     redraw_win_later(oldwin, NOT_VALID);
-    oldwin->w_redr_status = TRUE;
+    status_redraw_all();
 
     if (need_status)
     {
@@ -1380,6 +1383,8 @@ win_init(win_T *newp, win_T *oldp, int flags UNUSED)
 #endif
     newp->w_localdir = (oldp->w_localdir == NULL)
 				    ? NULL : vim_strsave(oldp->w_localdir);
+    newp->w_prevdir = (oldp->w_prevdir == NULL)
+				    ? NULL : vim_strsave(oldp->w_prevdir);
 
     // copy tagstack and folds
     for (i = 0; i < oldp->w_tagstacklen; i++)
@@ -1453,6 +1458,30 @@ win_valid(win_T *win)
 	if (wp == win)
 	    return TRUE;
     return win_valid_popup(win);
+}
+
+/*
+ * Find window "id" in the current tab page.
+ * Also find popup windows.
+ * Return NULL if not found.
+ */
+    win_T *
+win_find_by_id(int id)
+{
+    win_T   *wp;
+
+    FOR_ALL_WINDOWS(wp)
+	if (wp->w_id == id)
+	    return wp;
+#ifdef FEAT_PROP_POPUP
+    FOR_ALL_POPUPWINS(wp)
+	if (wp->w_id == id)
+	    return wp;
+    FOR_ALL_POPUPWINS_IN_TAB(curtab, wp)
+	if (wp->w_id == id)
+	    return wp;
+#endif
+    return NULL;
 }
 
 /*
@@ -1810,8 +1839,8 @@ win_move_after(win_T *win1, win_T *win2)
 	    return;
 	}
 
-	// may need move the status line/vertical separator of the last window
-	//
+	// may need to move the status line/vertical separator of the last
+	// window
 	if (win1 == lastwin)
 	{
 	    height = win1->w_prev->w_status_height;
@@ -2222,7 +2251,7 @@ leaving_window(win_T *win)
     }
 }
 
-    static void
+    void
 entering_window(win_T *win)
 {
     // Only matters for a prompt window.
@@ -2461,7 +2490,7 @@ win_close(win_T *win, int free_buf)
 	return FAIL; // window is already being closed
     if (win_unlisted(win))
     {
-	emsg(_("E813: Cannot close autocmd or popup window"));
+	emsg(_(e_autocmd_close));
 	return FAIL;
     }
     if ((firstwin == aucmd_win || lastwin == aucmd_win) && one_window())
@@ -2564,7 +2593,12 @@ win_close(win_T *win, int free_buf)
 
     // Now we are really going to close the window.  Disallow any autocommand
     // to split a window to avoid trouble.
+    // Also bail out of parse_queued_messages() to avoid it tries to update the
+    // screen.
     ++split_disallowed;
+#ifdef MESSAGE_QUEUE
+    ++dont_parse_messages;
+#endif
 
     // Free the memory used for the window and get the window that received
     // the screen space.
@@ -2621,6 +2655,9 @@ win_close(win_T *win, int free_buf)
     }
 
     --split_disallowed;
+#ifdef MESSAGE_QUEUE
+    --dont_parse_messages;
+#endif
 
     /*
      * If last window has a status line now and we don't want one,
@@ -2738,6 +2775,7 @@ win_free_mem(
 {
     frame_T	*frp;
     win_T	*wp;
+    tabpage_T	*win_tp = tp == NULL ? curtab : tp;
 
     // Remove the window and its frame from the tree of frames.
     frp = win->w_frame;
@@ -2745,10 +2783,10 @@ win_free_mem(
     vim_free(frp);
     win_free(win, tp);
 
-    // When deleting the current window of another tab page select a new
-    // current window.
-    if (tp != NULL && win == tp->tp_curwin)
-	tp->tp_curwin = wp;
+    // When deleting the current window in the tab, select a new current
+    // window.
+    if (win == win_tp->tp_curwin)
+	win_tp->tp_curwin = wp;
 
     return wp;
 }
@@ -3562,7 +3600,8 @@ close_others(
 	    if (!r)
 	    {
 #if defined(FEAT_GUI_DIALOG) || defined(FEAT_CON_DIALOG)
-		if (message && (p_confirm || cmdmod.confirm) && p_write)
+		if (message && (p_confirm
+			     || (cmdmod.cmod_flags & CMOD_CONFIRM)) && p_write)
 		{
 		    dialog_changed(wp->w_buffer, FALSE);
 		    if (!win_valid(wp))		// autocommands messed wp up
@@ -3809,6 +3848,9 @@ free_tabpage(tabpage_T *tp)
     unref_var_dict(tp->tp_vars);
 #endif
 
+    if (tp == lastused_tabpage)
+	lastused_tabpage = NULL;
+
     vim_free(tp->tp_localdir);
     vim_free(tp->tp_prevdir);
 
@@ -3834,6 +3876,7 @@ free_tabpage(tabpage_T *tp)
 win_new_tabpage(int after)
 {
     tabpage_T	*tp = curtab;
+    tabpage_T	*prev_tp = curtab;
     tabpage_T	*newtp;
     int		n;
 
@@ -3883,6 +3926,8 @@ win_new_tabpage(int after)
 	newtp->tp_topframe = topframe;
 	last_status(FALSE);
 
+	lastused_tabpage = prev_tp;
+
 #if defined(FEAT_GUI)
 	// When 'guioptions' includes 'L' or 'R' may have to remove or add
 	// scrollbars.  Have to update them anyway.
@@ -3913,11 +3958,12 @@ win_new_tabpage(int after)
     static int
 may_open_tabpage(void)
 {
-    int		n = (cmdmod.tab == 0) ? postponed_split_tab : cmdmod.tab;
+    int		n = (cmdmod.cmod_tab == 0)
+				       ? postponed_split_tab : cmdmod.cmod_tab;
 
     if (n != 0)
     {
-	cmdmod.tab = 0;	    // reset it to avoid doing it twice
+	cmdmod.cmod_tab = 0;	    // reset it to avoid doing it twice
 	postponed_split_tab = 0;
 	return win_new_tabpage(n);
     }
@@ -4118,6 +4164,7 @@ enter_tabpage(
     int		row;
     int		old_off = tp->tp_firstwin->w_winrow;
     win_T	*next_prevwin = tp->tp_prevwin;
+    tabpage_T	*last_tab = curtab;
 
     curtab = tp;
     firstwin = tp->tp_firstwin;
@@ -4159,6 +4206,8 @@ enter_tabpage(
 	shell_new_rows();
     if (curtab->tp_old_Columns != Columns && starting == 0)
 	shell_new_columns();	// update window widths
+
+    lastused_tabpage = last_tab;
 
 #if defined(FEAT_GUI)
     // When 'guioptions' includes 'L' or 'R' may have to remove or add
@@ -4275,6 +4324,21 @@ goto_tabpage_tp(
 	    enter_tabpage(curtab, curbuf, trigger_enter_autocmds,
 		    trigger_leave_autocmds);
     }
+}
+
+/*
+ * Go to the last accessed tab page, if there is one.
+ * Return OK or FAIL
+ */
+    int
+goto_tabpage_lastused(void)
+{
+    if (valid_tabpage(lastused_tabpage))
+    {
+	goto_tabpage_tp(lastused_tabpage, TRUE, TRUE);
+	return OK;
+    }
+    return FAIL;
 }
 
 /*
@@ -4983,7 +5047,26 @@ win_free(
     FOR_ALL_BUFFERS(buf)
 	FOR_ALL_BUF_WININFO(buf, wip)
 	    if (wip->wi_win == wp)
+	    {
+		wininfo_T	*wip2;
+
+		// If there already is an entry with "wi_win" set to NULL it
+		// must be removed, it would never be used.
+		for (wip2 = buf->b_wininfo; wip2 != NULL; wip2 = wip2->wi_next)
+		    if (wip2->wi_win == NULL)
+		    {
+			if (wip2->wi_next != NULL)
+			    wip2->wi_next->wi_prev = wip2->wi_prev;
+			if (wip2->wi_prev == NULL)
+			    buf->b_wininfo = wip2->wi_next;
+			else
+			    wip2->wi_prev->wi_next = wip2->wi_next;
+			free_wininfo(wip2);
+			break;
+		    }
+
 		wip->wi_win = NULL;
+	    }
 
 #ifdef FEAT_SEARCH_EXTRA
     clear_matches(wp);
@@ -5604,6 +5687,8 @@ win_setwidth_win(int width, win_T *wp)
 	if (width == 0)
 	    width = 1;
     }
+    else if (width < 0)
+	width = 0;
 
     frame_setwidth(wp->w_frame, width + wp->w_vsep_width);
 
@@ -6242,9 +6327,21 @@ win_new_width(win_T *wp, int width)
     void
 win_comp_scroll(win_T *wp)
 {
+#if defined(FEAT_EVAL)
+    int old_w_p_scr = wp->w_p_scr;
+#endif
+
     wp->w_p_scr = ((unsigned)wp->w_height >> 1);
     if (wp->w_p_scr == 0)
 	wp->w_p_scr = 1;
+#if defined(FEAT_EVAL)
+    if (wp->w_p_scr != old_w_p_scr)
+    {
+	// Used by "verbose set scroll".
+	wp->w_p_script_ctx[WV_SCROLL].sc_sid = SID_WINLAYOUT;
+	wp->w_p_script_ctx[WV_SCROLL].sc_lnum = 0;
+    }
+#endif
 }
 
 /*

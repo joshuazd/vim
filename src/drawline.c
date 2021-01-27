@@ -641,7 +641,7 @@ win_line(
 	    else
 		tocol = MAXCOL;
 	    // do at least one character; happens when past end of line
-	    if (fromcol == tocol)
+	    if (fromcol == tocol && search_match_endcol)
 		tocol = fromcol + 1;
 	    area_highlighting = TRUE;
 	    vi_attr = HL_ATTR(HLF_I);
@@ -909,7 +909,19 @@ win_line(
 	    if (!cul_screenline)
 	    {
 		cul_attr = HL_ATTR(HLF_CUL);
-		line_attr = cul_attr;
+# ifdef FEAT_SIGNS
+		// Combine the 'cursorline' and sign highlighting, depending on
+		// the sign priority.
+		if (sign_present && sattr.sat_linehl > 0)
+		{
+		    if (sattr.sat_priority >= 100)
+			line_attr = hl_combine_attr(cul_attr, line_attr);
+		    else
+			line_attr = hl_combine_attr(line_attr, cul_attr);
+		}
+		else
+# endif
+		    line_attr = cul_attr;
 		wp->w_last_cursorline = wp->w_cursor.lnum;
 	    }
 	    else
@@ -967,7 +979,7 @@ win_line(
     for (;;)
     {
 #if defined(FEAT_CONCEAL) || defined(FEAT_SEARCH_EXTRA)
-	int has_match_conc  = 0;	// match wants to conceal
+	int has_match_conc = 0;	// match wants to conceal
 #endif
 #ifdef FEAT_CONCEAL
 	int did_decrement_ptr = FALSE;
@@ -1334,6 +1346,11 @@ win_line(
 				      &screen_search_hl, &has_match_conc,
 				      &match_conc, did_line_attr, lcs_eol_one);
 		ptr = line + v;  // "line" may have been changed
+
+		// Do not allow a conceal over EOL otherwise EOL will be missed
+		// and bad things happen.
+		if (*ptr == NUL)
+		    has_match_conc = 0;
 	    }
 #endif
 
@@ -1856,6 +1873,7 @@ win_line(
 			char_u	*prev_ptr, *p;
 			int	len;
 			hlf_T	spell_hlf = HLF_COUNT;
+
 			if (has_mbyte)
 			{
 			    prev_ptr = ptr - mb_l;
@@ -2353,13 +2371,14 @@ win_line(
 	    {
 		char_attr = conceal_attr;
 		if ((prev_syntax_id != syntax_seqnr || has_match_conc > 1)
-			&& (syn_get_sub_char() != NUL || match_conc
-							 || wp->w_p_cole == 1)
+			&& (syn_get_sub_char() != NUL
+				|| (has_match_conc && match_conc)
+				|| wp->w_p_cole == 1)
 			&& wp->w_p_cole != 3)
 		{
 		    // First time at this concealed item: display one
 		    // character.
-		    if (match_conc)
+		    if (has_match_conc && match_conc)
 			c = match_conc;
 		    else if (syn_get_sub_char() != NUL)
 			c = syn_get_sub_char();
@@ -2427,15 +2446,18 @@ win_line(
 		&& conceal_cursor_line(wp)
 		&& (int)wp->w_virtcol <= vcol + n_skip)
 	{
-#  ifdef FEAT_RIGHTLEFT
+# ifdef FEAT_RIGHTLEFT
 	    if (wp->w_p_rl)
 		wp->w_wcol = wp->w_width - col + boguscols - 1;
 	    else
-#  endif
+# endif
 		wp->w_wcol = col - boguscols;
 	    wp->w_wrow = row;
 	    did_wcol = TRUE;
 	    curwin->w_valid |= VALID_WCOL|VALID_WROW|VALID_VIRTCOL;
+# ifdef FEAT_PROP_POPUP
+	    curwin->w_flags &= ~(WFLAG_WCOL_OFF_ADDED | WFLAG_WROW_OFF_ADDED);
+# endif
 	}
 #endif
 
@@ -2757,9 +2779,17 @@ win_line(
 	// highlight the cursor position itself.
 	// Also highlight the 'colorcolumn' if it is different than
 	// 'cursorcolumn'
+	// Also highlight the 'colorcolumn' if 'breakindent' and/or 'showbreak'
+	// options are set
 	vcol_save_attr = -1;
-	if (draw_state == WL_LINE && !lnum_in_visual_area
+	if (((draw_state == WL_LINE ||
+	     draw_state == WL_BRI ||
+	     draw_state == WL_SBR) && !lnum_in_visual_area
 		&& search_attr == 0 && area_attr == 0)
+# ifdef FEAT_DIFF
+			&& filler_todo <= 0
+# endif
+		)
 	{
 	    if (wp->w_p_cuc && VCOL_HLC == (long)wp->w_virtcol
 						 && lnum != wp->w_cursor.lnum)

@@ -1,4 +1,5 @@
 " Tests for various functions.
+
 source shared.vim
 source check.vim
 source term_util.vim
@@ -224,7 +225,7 @@ func Test_str2nr()
   if has('float')
     call assert_fails('call str2nr(1.2)', 'E806:')
   endif
-  call assert_fails('call str2nr(10, [])', 'E474:')
+  call assert_fails('call str2nr(10, [])', 'E745:')
 endfunc
 
 func Test_strftime()
@@ -297,9 +298,7 @@ func Test_strptime()
 endfunc
 
 func Test_resolve_unix()
-  if !has('unix')
-    return
-  endif
+  CheckUnix
 
   " Xlink1 -> Xlink2
   " Xlink2 -> Xlink3
@@ -340,6 +339,8 @@ func Test_resolve_unix()
   call assert_equal('Xlink2', resolve('Xlink1'))
   call assert_equal('./Xlink2', resolve('./Xlink1'))
   call delete('Xlink1')
+
+  call assert_equal('/', resolve('/'))
 endfunc
 
 func s:normalize_fname(fname)
@@ -349,9 +350,7 @@ func s:normalize_fname(fname)
 endfunc
 
 func Test_resolve_win32()
-  if !has('win32')
-    return
-  endif
+  CheckMSWindows
 
   " test for shortcut file
   if executable('cscript')
@@ -503,6 +502,24 @@ func Test_pathshorten()
   call assert_equal('.~f/bar', pathshorten('.~foo/bar'))
   call assert_equal('~/f/bar', pathshorten('~/foo/bar'))
   call assert_fails('call pathshorten([])', 'E730:')
+
+  " test pathshorten with optional variable to set preferred size of shortening
+  call assert_equal('', pathshorten('', 2))
+  call assert_equal('foo', pathshorten('foo', 2))
+  call assert_equal('/foo', pathshorten('/foo', 2))
+  call assert_equal('fo/', pathshorten('foo/', 2))
+  call assert_equal('fo/bar', pathshorten('foo/bar', 2))
+  call assert_equal('fo/ba/foobar', pathshorten('foo/bar/foobar', 2))
+  call assert_equal('/fo/ba/foobar', pathshorten('/foo/bar/foobar', 2))
+  call assert_equal('.fo/bar', pathshorten('.foo/bar', 2))
+  call assert_equal('~fo/bar', pathshorten('~foo/bar', 2))
+  call assert_equal('~.fo/bar', pathshorten('~.foo/bar', 2))
+  call assert_equal('.~fo/bar', pathshorten('.~foo/bar', 2))
+  call assert_equal('~/fo/bar', pathshorten('~/foo/bar', 2))
+  call assert_fails('call pathshorten([],2)', 'E730:')
+  call assert_notequal('~/fo/bar', pathshorten('~/foo/bar', 3))
+  call assert_equal('~/foo/bar', pathshorten('~/foo/bar', 3))
+  call assert_equal('~/f/bar', pathshorten('~/foo/bar', 0))
 endfunc
 
 func Test_strpart()
@@ -516,6 +533,10 @@ func Test_strpart()
 
   call assert_equal('lép', strpart('éléphant', 2, 4))
   call assert_equal('léphant', strpart('éléphant', 2))
+
+  call assert_equal('é', strpart('éléphant', 0, 1, 1))
+  call assert_equal('ép', strpart('éléphant', 3, 2, v:true))
+  call assert_equal('ó', strpart('cómposed', 1, 1, 1))
 endfunc
 
 func Test_tolower()
@@ -972,6 +993,7 @@ func Test_match_func()
   call assert_equal(4,  match('testing', 'ing', -1))
   call assert_fails("let x=match('testing', 'ing', 0, [])", 'E745:')
   call assert_equal(-1, match(test_null_list(), 2))
+  call assert_equal(-1, match('abc', '\\%('))
 endfunc
 
 func Test_matchend()
@@ -1110,6 +1132,31 @@ func Test_byteidx()
   call assert_fails("call byteidxcomp([], 0)", 'E730:')
 endfunc
 
+" Test for charidx()
+func Test_charidx()
+  let a = 'xáb́y'
+  call assert_equal(0, charidx(a, 0))
+  call assert_equal(1, charidx(a, 3))
+  call assert_equal(2, charidx(a, 4))
+  call assert_equal(3, charidx(a, 7))
+  call assert_equal(-1, charidx(a, 8))
+  call assert_equal(-1, charidx('', 0))
+
+  " count composing characters
+  call assert_equal(0, charidx(a, 0, 1))
+  call assert_equal(2, charidx(a, 2, 1))
+  call assert_equal(3, charidx(a, 4, 1))
+  call assert_equal(5, charidx(a, 7, 1))
+  call assert_equal(-1, charidx(a, 8, 1))
+  call assert_equal(-1, charidx('', 0, 1))
+
+  call assert_fails('let x = charidx([], 1)', 'E474:')
+  call assert_fails('let x = charidx("abc", [])', 'E474:')
+  call assert_fails('let x = charidx("abc", 1, [])', 'E474:')
+  call assert_fails('let x = charidx("abc", 1, -1)', 'E1023:')
+  call assert_fails('let x = charidx("abc", 1, 2)', 'E1023:')
+endfunc
+
 func Test_count()
   let l = ['a', 'a', 'A', 'b']
   call assert_equal(2, count(l, 'a'))
@@ -1241,17 +1288,32 @@ func Test_Executable()
     " check that the relative path works in /
     lcd /
     call assert_equal(1, executable(catcmd))
-    call assert_equal('/' .. catcmd, catcmd->exepath())
+    let result = catcmd->exepath()
+    " when using chroot looking for sbin/cat can return bin/cat, that is OK
+    if catcmd =~ '\<sbin\>' && result =~ '\<bin\>'
+      call assert_equal('/' .. substitute(catcmd, '\<sbin\>', 'bin', ''), result)
+    else
+      call assert_equal('/' .. catcmd, result)
+    endif
     bwipe
+  else
+    throw 'Skipped: does not work on this platform'
   endif
 endfunc
 
 func Test_executable_longname()
-  if !has('win32')
-    return
+  CheckMSWindows
+
+  " Create a temporary .bat file with 205 characters in the name.
+  " Maximum length of a filename (including the path) on MS-Windows is 259
+  " characters.
+  " See https://docs.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation
+  let len = 259 - getcwd()->len() - 6
+  if len > 200
+    let len = 200
   endif
 
-  let fname = 'X' . repeat('あ', 200) . '.bat'
+  let fname = 'X' . repeat('あ', len) . '.bat'
   call writefile([], fname)
   call assert_equal(1, executable(fname))
   call delete(fname)
@@ -1355,7 +1417,7 @@ func Test_input_func()
   func! Tcomplete(arglead, cmdline, pos)
     return "item1\nitem2\nitem3"
   endfunc
-  call feedkeys(":let c = input('Q? ', '' , 'custom,Tcomplete')\<CR>"
+  call feedkeys(":let c = input('Q? ', '', 'custom,Tcomplete')\<CR>"
         \ .. "\<C-A>\<CR>", 'xt')
   delfunc Tcomplete
   call assert_equal('item1 item2 item3', c)
@@ -1418,13 +1480,12 @@ func Test_inputlist()
 endfunc
 
 func Test_balloon_show()
-  if has('balloon_eval')
-    " This won't do anything but must not crash either.
-    call balloon_show('hi!')
-    if !has('gui_running')
-      call balloon_show(range(3))
-      call balloon_show([])
-    endif
+  CheckFeature balloon_eval
+  " This won't do anything but must not crash either.
+  call balloon_show('hi!')
+  if !has('gui_running')
+    call balloon_show(range(3))
+    call balloon_show([])
   endif
 endfunc
 
@@ -1438,19 +1499,19 @@ func Test_setbufvar_options()
   let prev_id = win_getid()
 
   wincmd j
-  let wh = winheight('.')
+  let wh = winheight(0)
   let dummy_buf = bufnr('dummy_buf1', v:true)
   call setbufvar(dummy_buf, '&buftype', 'nofile')
   execute 'belowright vertical split #' . dummy_buf
-  call assert_equal(wh, winheight('.'))
+  call assert_equal(wh, winheight(0))
   let dum1_id = win_getid()
 
   wincmd h
-  let wh = winheight('.')
+  let wh = winheight(0)
   let dummy_buf = bufnr('dummy_buf2', v:true)
   eval 'nofile'->setbufvar(dummy_buf, '&buftype')
   execute 'belowright vertical split #' . dummy_buf
-  call assert_equal(wh, winheight('.'))
+  call assert_equal(wh, winheight(0))
 
   bwipe!
   call win_gotoid(prev_id)
@@ -1654,9 +1715,7 @@ func Test_getchar()
 endfunc
 
 func Test_libcall_libcallnr()
-  if !has('libcall')
-    return
-  endif
+  CheckFeature libcall
 
   if has('win32')
     let libc = 'msvcrt.dll'
@@ -1702,11 +1761,11 @@ func Test_libcall_libcallnr()
   call assert_equal(4, 'abcd'->libcallnr(libc, 'strlen'))
   call assert_equal(char2nr('A'), char2nr('a')->libcallnr(libc, 'toupper'))
 
-  call assert_fails("call libcall(libc, 'Xdoesnotexist_', '')", 'E364:')
-  call assert_fails("call libcallnr(libc, 'Xdoesnotexist_', '')", 'E364:')
+  call assert_fails("call libcall(libc, 'Xdoesnotexist_', '')", ['', 'E364:'])
+  call assert_fails("call libcallnr(libc, 'Xdoesnotexist_', '')", ['', 'E364:'])
 
-  call assert_fails("call libcall('Xdoesnotexist_', 'getenv', 'HOME')", 'E364:')
-  call assert_fails("call libcallnr('Xdoesnotexist_', 'strlen', 'abcd')", 'E364:')
+  call assert_fails("call libcall('Xdoesnotexist_', 'getenv', 'HOME')", ['', 'E364:'])
+  call assert_fails("call libcallnr('Xdoesnotexist_', 'strlen', 'abcd')", ['', 'E364:'])
 endfunc
 
 sandbox function Fsandbox()
@@ -1940,6 +1999,8 @@ func Test_readdirex()
         \ ['bar.txt_file', 'dir_dir', 'foo.txt_file', 'link_link'])
   endif
   eval 'Xdir'->delete('rf')
+
+  call assert_fails('call readdirex("doesnotexist")', 'E484:')
 endfunc
 
 func Test_readdirex_sort()
@@ -2027,7 +2088,7 @@ func Test_readdir_sort()
   exe "lang collate" collate
 
   " 5) Errors
-  call assert_fails('call readdir(dir, 1, 1)', 'E715')
+  call assert_fails('call readdir(dir, 1, 1)', 'E715:')
   call assert_fails('call readdir(dir, 1, #{sorta: 1})')
   call assert_fails('call readdirex(dir, 1, #{sorta: 1})')
 
@@ -2069,6 +2130,7 @@ func Test_call()
   let mydict = {'data': [0, 1, 2, 3], 'len': function("Mylen")}
   eval mydict.len->call([], mydict)->assert_equal(4)
   call assert_fails("call call('Mylen', [], 0)", 'E715:')
+  call assert_fails('call foo', 'E107:')
 endfunc
 
 func Test_char2nr()
@@ -2077,6 +2139,13 @@ func Test_char2nr()
   set encoding=latin1
   call assert_equal(120, 'x'->char2nr())
   set encoding=utf-8
+endfunc
+
+func Test_charclass()
+  call assert_equal(0, charclass(' '))
+  call assert_equal(1, charclass('.'))
+  call assert_equal(2, charclass('x'))
+  call assert_equal(3, charclass("\u203c"))
 endfunc
 
 func Test_eventhandler()
@@ -2265,6 +2334,7 @@ func Test_range()
 
   " filter()
   call assert_equal([1, 3], filter(range(5), 'v:val % 2'))
+  call assert_equal([1, 5, 7, 11, 13], filter(filter(range(15), 'v:val % 2'), 'v:val % 3'))
 
   " funcref()
   call assert_equal([0, 1], funcref('TwoArgs', range(2))())
@@ -2321,6 +2391,9 @@ func Test_range()
 
   " map()
   call assert_equal([0, 2, 4, 6, 8], map(range(5), 'v:val * 2'))
+  call assert_equal([3, 5, 7, 9, 11], map(map(range(5), 'v:val * 2'), 'v:val + 3'))
+  call assert_equal([2, 6], map(filter(range(5), 'v:val % 2'), 'v:val * 2'))
+  call assert_equal([2, 4, 8], filter(map(range(5), 'v:val * 2'), 'v:val % 3'))
 
   " match()
   call assert_equal(3, match(range(5), 3))
@@ -2515,13 +2588,38 @@ func Test_getcurpos_setpos()
   call assert_equal('6', @")
   call assert_equal(-1, setpos('.', test_null_list()))
   call assert_equal(-1, setpos('.', {}))
+
+  let winid = win_getid()
+  normal G$
+  let pos = getcurpos()
+  wincmd w
+  call assert_equal(pos, getcurpos(winid))
+
+  wincmd w
   close!
+
+  call assert_equal(getcurpos(), getcurpos(0))
+  call assert_equal([0, 0, 0, 0, 0], getcurpos(-1))
+  call assert_equal([0, 0, 0, 0, 0], getcurpos(1999))
 endfunc
 
 " Test for glob()
 func Test_glob()
   call assert_equal('', glob(test_null_string()))
   call assert_equal('', globpath(test_null_string(), test_null_string()))
+
+  call writefile([], 'Xglob1')
+  call writefile([], 'XGLOB2')
+  set wildignorecase
+  " Sort output of glob() otherwise we end up with different
+  " ordering depending on whether file system is case-sensitive.
+  call assert_equal(['XGLOB2', 'Xglob1'], sort(glob('Xglob[12]', 0, 1)))
+  set wildignorecase&
+
+  call delete('Xglob1')
+  call delete('XGLOB2')
+
+  call assert_fails("call glob('*', 0, {})", 'E728:')
 endfunc
 
 " Test for browse()

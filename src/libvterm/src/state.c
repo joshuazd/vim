@@ -133,7 +133,7 @@ static void scroll(VTermState *state, VTermRect rect, int downward, int rightwar
   if(rect.start_col == 0 && rect.end_col == state->cols && rightward == 0) {
     int height = rect.end_row - rect.start_row - abs(downward);
     int row;
-    VTermLineInfo zeroLineInfo = { 0 };
+    VTermLineInfo zeroLineInfo = {0x0};
 
     if(downward > 0) {
       memmove(state->lineinfo + rect.start_row,
@@ -1813,7 +1813,7 @@ static int on_resize(int rows, int cols, void *user)
       }
 
       for( ; row < rows; row++) {
-	VTermLineInfo lineInfo = {0};
+	VTermLineInfo lineInfo = {0x0};
 	newlineinfo[row] = lineInfo;
       }
 
@@ -1844,14 +1844,14 @@ static int on_resize(int rows, int cols, void *user)
     state->pos.col++;
   }
 
-  if(state->pos.row >= rows)
-    state->pos.row = rows - 1;
   if(state->pos.row < 0)
     state->pos.row = 0;
-  if(state->pos.col >= cols)
-    state->pos.col = cols - 1;
+  if(state->pos.row >= rows)
+    state->pos.row = rows - 1;
   if(state->pos.col < 0)
     state->pos.col = 0;
+  if(state->pos.col >= cols)
+    state->pos.col = cols - 1;
 
   updatecursor(state, &oldpos, 1);
 

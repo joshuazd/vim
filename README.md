@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ![Vim Logo](https://github.com/vim/vim/blob/master/runtime/vimlogo.gif)
 
 [![Travis Build Status](https://travis-ci.org/joshuazd/vim.svg?branch=master)](https://travis-ci.org/joshuazd/vim)

@@ -37,6 +37,7 @@
 
 static void set_options_default(int opt_flags);
 static void set_string_default_esc(char *name, char_u *val, int escape);
+static char_u *find_dup_item(char_u *origval, char_u *newval, long_u flags);
 static char_u *option_expand(int opt_idx, char_u *val);
 static void didset_options(void);
 static void didset_options2(void);
@@ -139,6 +140,9 @@ set_init_1(int clean_arg)
 	int		len;
 	garray_T	ga;
 	int		mustfree;
+	char_u		*item;
+
+	opt_idx = findoption((char_u *)"backupskip");
 
 	ga_init2(&ga, 1, 100);
 	for (n = 0; n < (long)(sizeof(names) / sizeof(char *)); ++n)
@@ -158,15 +162,20 @@ set_init_1(int clean_arg)
 	    {
 		// First time count the NUL, otherwise count the ','.
 		len = (int)STRLEN(p) + 3;
-		if (ga_grow(&ga, len) == OK)
+		item = alloc(len);
+		STRCPY(item, p);
+		add_pathsep(item);
+		STRCAT(item, "*");
+		if (find_dup_item(ga.ga_data, item, options[opt_idx].flags)
+									== NULL
+			&& ga_grow(&ga, len) == OK)
 		{
 		    if (ga.ga_len > 0)
 			STRCAT(ga.ga_data, ",");
-		    STRCAT(ga.ga_data, p);
-		    add_pathsep(ga.ga_data);
-		    STRCAT(ga.ga_data, "*");
+		    STRCAT(ga.ga_data, item);
 		    ga.ga_len += len;
 		}
+		vim_free(item);
 	    }
 	    if (mustfree)
 		vim_free(p);
@@ -668,6 +677,46 @@ set_string_default(char *name, char_u *val)
 }
 
 /*
+ * For an option value that contains comma separated items, find "newval" in
+ * "origval".  Return NULL if not found.
+ */
+    static char_u *
+find_dup_item(char_u *origval, char_u *newval, long_u flags)
+{
+    int	    bs = 0;
+    size_t  newlen;
+    char_u  *s;
+
+    if (origval == NULL)
+	return NULL;
+
+    newlen = STRLEN(newval);
+    for (s = origval; *s != NUL; ++s)
+    {
+	if ((!(flags & P_COMMA)
+		    || s == origval
+		    || (s[-1] == ',' && !(bs & 1)))
+		&& STRNCMP(s, newval, newlen) == 0
+		&& (!(flags & P_COMMA)
+		    || s[newlen] == ','
+		    || s[newlen] == NUL))
+	    return s;
+	// Count backslashes.  Only a comma with an even number of backslashes
+	// or a single backslash preceded by a comma before it is recognized as
+	// a separator.
+	if ((s > origval + 1
+		    && s[-1] == '\\'
+		    && s[-2] != ',')
+		|| (s == origval + 1
+		    && s[-1] == '\\'))
+	    ++bs;
+	else
+	    bs = 0;
+    }
+    return NULL;
+}
+
+/*
  * Set the Vi-default value of a number option.
  * Used for 'lines' and 'columns'.
  */
@@ -1076,7 +1125,7 @@ ex_set(exarg_T *eap)
     else if (eap->cmdidx == CMD_setglobal)
 	flags = OPT_GLOBAL;
 #if defined(FEAT_EVAL) && defined(FEAT_BROWSE)
-    if (cmdmod.browse && flags == 0)
+    if ((cmdmod.cmod_flags & CMOD_BROWSE) && flags == 0)
 	ex_options(eap);
     else
 #endif
@@ -1311,12 +1360,12 @@ do_set(
 	    {
 		if (flags & (P_SECURE | P_NO_ML))
 		{
-		    errmsg = _("E520: Not allowed in a modeline");
+		    errmsg = N_("E520: Not allowed in a modeline");
 		    goto skip;
 		}
 		if ((flags & P_MLE) && !p_mle)
 		{
-		    errmsg = _("E992: Not allowed in a modeline when 'modelineexpr' is off");
+		    errmsg = N_("E992: Not allowed in a modeline when 'modelineexpr' is off");
 		    goto skip;
 		}
 #ifdef FEAT_DIFF
@@ -1338,7 +1387,7 @@ do_set(
 	    // Disallow changing some options in the sandbox
 	    if (sandbox != 0 && (flags & P_SECURE))
 	    {
-		errmsg = _(e_sandbox);
+		errmsg = e_sandbox;
 		goto skip;
 	    }
 #endif
@@ -1572,7 +1621,6 @@ do_set(
 #endif
 			unsigned  newlen;
 			int	  comma;
-			int	  bs;
 			int	  new_value_alloced;	// new string option
 							// was allocated
 
@@ -1763,6 +1811,7 @@ do_set(
 #ifdef BACKSLASH_IN_FILENAME
 					&& !((flags & P_EXPAND)
 						&& vim_isfilec(arg[1])
+						&& !VIM_ISWHITE(arg[1])
 						&& (arg[1] != '\\'
 						    || (s == newval
 							&& arg[2] != '\\')))
@@ -1810,39 +1859,20 @@ do_set(
 			    if (removing || (flags & P_NODUP))
 			    {
 				i = (int)STRLEN(newval);
-				bs = 0;
-				for (s = origval; *s; ++s)
-				{
-				    if ((!(flags & P_COMMA)
-						|| s == origval
-						|| (s[-1] == ',' && !(bs & 1)))
-					    && STRNCMP(s, newval, i) == 0
-					    && (!(flags & P_COMMA)
-						|| s[i] == ','
-						|| s[i] == NUL))
-					break;
-				    // Count backslashes.  Only a comma with an
-				    // even number of backslashes or a single
-				    // backslash preceded by a comma before it
-				    // is recognized as a separator
-				    if ((s > origval + 1
-						&& s[-1] == '\\'
-						&& s[-2] != ',')
-					    || (s == origval + 1
-						&& s[-1] == '\\'))
-
-					++bs;
-				    else
-					bs = 0;
-				}
+				s = find_dup_item(origval, newval, flags);
 
 				// do not add if already there
-				if ((adding || prepending) && *s)
+				if ((adding || prepending) && s != NULL)
 				{
 				    prepending = FALSE;
 				    adding = FALSE;
 				    STRCPY(newval, origval);
 				}
+
+				// if no duplicate, move pointer to end of
+				// original value
+				if (s == NULL)
+				    s = origval + (int)STRLEN(origval);
 			    }
 
 			    // concatenate the two strings; add a ',' if
@@ -3804,13 +3834,15 @@ findoption(char_u *arg)
  * Get the value for an option.
  *
  * Returns:
- * Number or Toggle option: 1, *numval gets value.
- *	     String option: 0, *stringval gets allocated string.
- * Hidden Number or Toggle option: -1.
- *	     hidden String option: -2.
- *		   unknown option: -3.
+ * Number option: gov_number, *numval gets value.
+ * Toggle option: gov_bool,   *numval gets value.
+ * String option: gov_string, *stringval gets allocated string.
+ * Hidden Number option: gov_hidden_number.
+ * Hidden Toggle option: gov_hidden_bool.
+ * Hidden String option: gov_hidden_string.
+ * Unknown option: gov_unknown.
  */
-    int
+    getoption_T
 get_option_value(
     char_u	*name,
     long	*numval,
@@ -3821,16 +3853,17 @@ get_option_value(
     char_u	*varp;
 
     opt_idx = findoption(name);
-    if (opt_idx < 0)		    // unknown option
+    if (opt_idx < 0)		    // option not in the table
     {
 	int key;
 
 	if (STRLEN(name) == 4 && name[0] == 't' && name[1] == '_'
-		&& (key = find_key_option(name, FALSE)) != 0)
+				  && (key = find_key_option(name, FALSE)) != 0)
 	{
 	    char_u key_name[2];
 	    char_u *p;
 
+	    // check for a terminal option
 	    if (key < 0)
 	    {
 		key_name[0] = KEY2TERMCAP0(key);
@@ -3846,10 +3879,10 @@ get_option_value(
 	    {
 		if (stringval != NULL)
 		    *stringval = vim_strsave(p);
-		return 0;
+		return gov_string;
 	    }
 	}
-	return -3;
+	return gov_unknown;
     }
 
     varp = get_varp_scope(&(options[opt_idx]), opt_flags);
@@ -3857,7 +3890,7 @@ get_option_value(
     if (options[opt_idx].flags & P_STRING)
     {
 	if (varp == NULL)		    // hidden option
-	    return -2;
+	    return gov_hidden_string;
 	if (stringval != NULL)
 	{
 #ifdef FEAT_CRYPT
@@ -3869,11 +3902,12 @@ get_option_value(
 #endif
 		*stringval = vim_strsave(*(char_u **)(varp));
 	}
-	return 0;
+	return gov_string;
     }
 
     if (varp == NULL)		    // hidden option
-	return -1;
+	return (options[opt_idx].flags & P_NUM)
+					 ? gov_hidden_number : gov_hidden_bool;
     if (options[opt_idx].flags & P_NUM)
 	*numval = *(long *)varp;
     else
@@ -3885,7 +3919,7 @@ get_option_value(
 	else
 	    *numval = (long) *(int *)varp;
     }
-    return 1;
+    return (options[opt_idx].flags & P_NUM) ? gov_number : gov_bool;
 }
 #endif
 
@@ -5744,7 +5778,7 @@ buf_copy_options(buf_T *buf, int flags)
 	    buf->b_p_ml_nobin = p_ml_nobin;
 	    buf->b_p_inf = p_inf;
 	    COPY_OPT_SCTX(buf, BV_INF);
-	    if (cmdmod.noswapfile)
+	    if (cmdmod.cmod_flags & CMOD_NOSWAPFILE)
 		buf->b_p_swf = FALSE;
 	    else
 	    {
@@ -6966,3 +7000,22 @@ fill_culopt_flags(char_u *val, win_T *wp)
     return OK;
 }
 #endif
+
+/*
+ * Get the value of 'magic' adjusted for Vim9 script.
+ */
+    int
+magic_isset(void)
+{
+    switch (magic_overruled)
+    {
+	case OPTION_MAGIC_ON:      return TRUE;
+	case OPTION_MAGIC_OFF:     return FALSE;
+	case OPTION_MAGIC_NOT_SET: break;
+    }
+#ifdef FEAT_EVAL
+    if (in_vim9script())
+	return TRUE;
+#endif
+    return p_magic;
+}

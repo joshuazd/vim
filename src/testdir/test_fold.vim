@@ -95,9 +95,7 @@ func Test_indent_fold2()
 endfunc
 
 func Test_manual_fold_with_filter()
-  if !executable('cat')
-    return
-  endif
+  CheckExecutable cat
   for type in ['manual', 'marker']
     exe 'set foldmethod=' . type
     new
@@ -557,9 +555,7 @@ endfunc
 
 " test syntax folding
 func Test_fold_syntax()
-  if !has('syntax')
-    return
-  endif
+  CheckFeature syntax
 
   enew!
   set fdm=syntax fdl=0
@@ -816,6 +812,86 @@ func Test_fold_expr_error()
 
   set foldmethod& foldexpr&
   close!
+endfunc
+
+func Test_undo_fold_deletion()
+  new
+  set fdm=marker
+  let lines =<< trim END
+      " {{{
+      " }}}1
+      " {{{
+  END
+  call setline(1, lines)
+  3d
+  g/"/d
+  undo
+  redo
+  eval getline(1, '$')->assert_equal([''])
+
+  set fdm&vim
+  bwipe!
+endfunc
+
+" this was crashing
+func Test_move_no_folds()
+  new
+  fold
+  setlocal fdm=expr
+  normal zj
+  bwipe!
+endfunc
+
+" this was crashing
+func Test_fold_create_delete_create()
+  new
+  fold
+  fold
+  normal zd
+  fold
+  bwipe!
+endfunc
+
+" this was crashing
+func Test_fold_create_delete()
+  new
+  norm zFzFzdzj
+  bwipe!
+endfunc
+
+func Test_fold_relative_move()
+  enew!
+  set fdm=indent sw=2 wrap tw=80
+
+  let content = [ '  foo', '  bar', '  baz',
+              \   repeat('x', &columns + 1),
+              \   '  foo', '  bar', '  baz'
+              \ ]
+  call append(0, content)
+
+  normal zM
+
+  call cursor(3, 1)
+  call assert_true(foldclosed(line('.')))
+  normal gj
+  call assert_equal(2, winline())
+
+  call cursor(2, 1)
+  call assert_true(foldclosed(line('.')))
+  normal 2gj
+  call assert_equal(3, winline())
+
+  call cursor(5, 1)
+  call assert_true(foldclosed(line('.')))
+  normal gk
+  call assert_equal(3, winline())
+
+  call cursor(6, 1)
+  call assert_true(foldclosed(line('.')))
+  normal 2gk
+  call assert_equal(2, winline())
+
+  set fdm& sw& wrap& tw&
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

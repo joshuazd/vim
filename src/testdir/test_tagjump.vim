@@ -8,8 +8,49 @@ func Test_ptag_with_notagstack()
   CheckFeature quickfix
 
   set notagstack
-  call assert_fails('ptag does_not_exist_tag_name', 'E426')
+  call assert_fails('ptag does_not_exist_tag_name', 'E433:')
   set tagstack&vim
+endfunc
+
+func Test_ptjump()
+  CheckFeature quickfix
+
+  set tags=Xtags
+  call writefile(["!_TAG_FILE_ENCODING\tutf-8\t//",
+        \ "one\tXfile\t1",
+        \ "three\tXfile\t3",
+        \ "two\tXfile\t2"],
+        \ 'Xtags')
+  call writefile(['one', 'two', 'three'], 'Xfile')
+
+  %bw!
+  ptjump two
+  call assert_equal(2, winnr())
+  wincmd p
+  call assert_equal(1, &previewwindow)
+  call assert_equal('Xfile', expand("%:p:t"))
+  call assert_equal(2, line('.'))
+  call assert_equal(2, winnr('$'))
+  call assert_equal(1, winnr())
+  close
+  call setline(1, ['one', 'two', 'three'])
+  exe "normal 3G\<C-W>g}"
+  call assert_equal(2, winnr())
+  wincmd p
+  call assert_equal(1, &previewwindow)
+  call assert_equal('Xfile', expand("%:p:t"))
+  call assert_equal(3, line('.'))
+  call assert_equal(2, winnr('$'))
+  call assert_equal(1, winnr())
+  close
+  exe "normal 3G5\<C-W>\<C-G>}"
+  wincmd p
+  call assert_equal(5, winheight(0))
+  close
+
+  call delete('Xtags')
+  call delete('Xfile')
+  set tags&
 endfunc
 
 func Test_cancel_ptjump()
@@ -143,6 +184,10 @@ function Test_keyword_jump()
   call search("start")
   exe "normal! 5\<C-W>\<C-I>"
   call assert_equal("		start OK if found this line", getline('.'))
+
+  " invalid tag search pattern
+  call assert_fails('tag /\%(/', 'E426:')
+
   enew! | only
   call delete('Xtestfile')
   call delete('Xinclude')
@@ -151,9 +196,8 @@ endfunction
 " Test for jumping to a tag with 'hidden' set, with symbolic link in path of
 " tag.  This only works for Unix, because of the symbolic link.
 func Test_tag_symbolic()
-  if !has('unix')
-    return
-  endif
+  CheckUnix
+
   set hidden
   call delete("Xtest.dir", "rf")
   call system("ln -s . Xtest.dir")
@@ -189,11 +233,11 @@ endfunc
 " Depends on the test83-tags2 and test83-tags3 files.
 func Test_tag_file_encoding()
   if has('vms')
-    return
+    throw 'Skipped: does not work on VMS'
   endif
 
   if !has('iconv') || iconv("\x82\x60", "cp932", "utf-8") != "\uff21"
-    return
+    throw 'Skipped: iconv does not work'
   endif
 
   let save_enc = &encoding
@@ -242,9 +286,8 @@ endfunc
 
 " Test for emacs-style tags file (TAGS)
 func Test_tagjump_etags()
-  if !has('emacs_tags')
-    return
-  endif
+  CheckFeature emacs_tags
+
   call writefile([
         \ "void foo() {}",
         \ "int main(int argc, char **argv)",
@@ -304,7 +347,7 @@ func Test_tagjump_etags()
         \ "Xmain.c,64",
         \ ";;;;\x7f1,0",
 	\ ], 'Xtags')
-  call assert_fails('tag foo', 'E426:')
+  call assert_fails('tag foo', 'E431:')
 
   call delete('Xtags')
   call delete('Xtags2')
@@ -326,10 +369,10 @@ func Test_getsettagstack()
   " Error cases
   call assert_equal({}, gettagstack(100))
   call assert_equal(-1, settagstack(100, {'items' : []}))
-  call assert_fails('call settagstack(1, [1, 10])', 'E715')
-  call assert_fails("call settagstack(1, {'items' : 10})", 'E714')
-  call assert_fails("call settagstack(1, {'items' : []}, 10)", 'E928')
-  call assert_fails("call settagstack(1, {'items' : []}, 'b')", 'E962')
+  call assert_fails('call settagstack(1, [1, 10])', 'E715:')
+  call assert_fails("call settagstack(1, {'items' : 10})", 'E714:')
+  call assert_fails("call settagstack(1, {'items' : []}, 10)", 'E928:')
+  call assert_fails("call settagstack(1, {'items' : []}, 'b')", 'E962:')
   call assert_equal(-1, settagstack(0, test_null_dict()))
 
   set tags=Xtags
@@ -526,7 +569,7 @@ func Test_tag_line_toolong()
   let old_vbs = &verbose
   set verbose=5
   " ":tjump" should give "tag not found" not "Format error in tags file"
-  call assert_fails('tj /foo', 'E426')
+  call assert_fails('tj /foo', 'E426:')
   try
     tj /foo
   catch /^Vim\%((\a\+)\)\=:E431/
@@ -538,7 +581,7 @@ func Test_tag_line_toolong()
   call writefile([
 	\ '123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567	django/contrib/admin/templates/admin/edit_inline/stacked.html	16;"	j	line:16	language:HTML'
 	\ ], 'Xtags')
-  call assert_fails('tj /foo', 'E426')
+  call assert_fails('tj /foo', 'E426:')
   try
     tj /foo
   catch /^Vim\%((\a\+)\)\=:E431/
@@ -1090,7 +1133,7 @@ endfunc
 " Test for [i, ]i, [I, ]I, [ CTRL-I, ] CTRL-I and CTRL-W i commands
 func Test_inc_search()
   new
-  call setline(1, ['1:foo', '2:foo', 'foo', '3:foo', '4:foo'])
+  call setline(1, ['1:foo', '2:foo', 'foo', '3:foo', '4:foo', '==='])
   call cursor(3, 1)
 
   " Test for [i and ]i
@@ -1100,6 +1143,9 @@ func Test_inc_search()
   call assert_equal('3:foo', execute('normal ]i'))
   call assert_equal('4:foo', execute('normal 2]i'))
   call assert_fails('normal 3]i', 'E389:')
+  call assert_fails('normal G]i', 'E349:')
+  call assert_fails('normal [i', 'E349:')
+  call cursor(3, 1)
 
   " Test for :isearch
   call assert_equal('1:foo', execute('isearch foo'))
@@ -1120,6 +1166,9 @@ func Test_inc_search()
   call assert_equal([
         \ '  1:    4 3:foo',
         \ '  2:    5 4:foo'], split(execute('normal ]I'), "\n"))
+  call assert_fails('normal G]I', 'E349:')
+  call assert_fails('normal [I', 'E349:')
+  call cursor(3, 1)
 
   " Test for :ilist
   call assert_equal([
@@ -1145,6 +1194,9 @@ func Test_inc_search()
   exe "normal k2]\t"
   call assert_equal([5, 3], [line('.'), col('.')])
   call assert_fails("normal 2k3]\t", 'E389:')
+  call assert_fails("normal G[\t", 'E349:')
+  call assert_fails("normal ]\t", 'E349:')
+  call cursor(3, 1)
 
   " Test for :ijump
   call cursor(3, 1)
@@ -1169,6 +1221,8 @@ func Test_inc_search()
   close
   call assert_fails('3wincmd i', 'E387:')
   call assert_fails('6wincmd i', 'E389:')
+  call assert_fails("normal G\<C-W>i", 'E349:')
+  call cursor(3, 1)
 
   " Test for :isplit
   isplit foo
@@ -1267,6 +1321,10 @@ func Test_macro_search()
   close
   call assert_fails('3wincmd d', 'E387:')
   call assert_fails('6wincmd d', 'E388:')
+  new
+  call assert_fails("normal \<C-W>d", 'E349:')
+  call assert_fails("normal \<C-W>\<C-D>", 'E349:')
+  close
 
   " Test for :dsplit
   dsplit FOO

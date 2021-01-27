@@ -140,36 +140,15 @@ setpcmark(void)
     int		i;
     xfmark_T	*fm;
 #endif
-#ifdef JUMPLIST_ROTATE
-    xfmark_T	tempmark;
-#endif
 
     // for :global the mark is set only once
-    if (global_busy || listcmd_busy || cmdmod.keepjumps)
+    if (global_busy || listcmd_busy || (cmdmod.cmod_flags & CMOD_KEEPJUMPS))
 	return;
 
     curwin->w_prev_pcmark = curwin->w_pcmark;
     curwin->w_pcmark = curwin->w_cursor;
 
 #ifdef FEAT_JUMPLIST
-# ifdef JUMPLIST_ROTATE
-    /*
-     * If last used entry is not at the top, put it at the top by rotating
-     * the stack until it is (the newer entries will be at the bottom).
-     * Keep one entry (the last used one) at the top.
-     */
-    if (curwin->w_jumplistidx < curwin->w_jumplistlen)
-	++curwin->w_jumplistidx;
-    while (curwin->w_jumplistidx < curwin->w_jumplistlen)
-    {
-	tempmark = curwin->w_jumplist[curwin->w_jumplistlen - 1];
-	for (i = curwin->w_jumplistlen - 1; i > 0; --i)
-	    curwin->w_jumplist[i] = curwin->w_jumplist[i - 1];
-	curwin->w_jumplist[0] = tempmark;
-	++curwin->w_jumplistidx;
-    }
-# endif
-
     // If jumplist is full: remove oldest entry
     if (++curwin->w_jumplistlen > JUMPLISTSIZE)
     {
@@ -704,6 +683,7 @@ ex_marks(exarg_T *eap)
     char_u	*arg = eap->arg;
     int		i;
     char_u	*name;
+    pos_T	*posp, *startp, *endp;
 
     if (arg != NULL && *arg == NUL)
 	arg = NULL;
@@ -731,8 +711,17 @@ ex_marks(exarg_T *eap)
     show_one_mark(']', arg, &curbuf->b_op_end, NULL, TRUE);
     show_one_mark('^', arg, &curbuf->b_last_insert, NULL, TRUE);
     show_one_mark('.', arg, &curbuf->b_last_change, NULL, TRUE);
-    show_one_mark('<', arg, &curbuf->b_visual.vi_start, NULL, TRUE);
-    show_one_mark('>', arg, &curbuf->b_visual.vi_end, NULL, TRUE);
+
+    // Show the marks as where they will jump to.
+    startp = &curbuf->b_visual.vi_start;
+    endp = &curbuf->b_visual.vi_end;
+    if ((LT_POS(*startp, *endp) || endp->lnum == 0) && startp->lnum != 0)
+	posp = startp;
+    else
+	posp = endp;
+    show_one_mark('<', arg, posp, NULL, TRUE);
+    show_one_mark('>', arg, posp == startp ? endp : startp, NULL, TRUE);
+
     show_one_mark(-1, arg, NULL, NULL, FALSE);
 }
 
@@ -1058,7 +1047,7 @@ mark_adjust_internal(
     if (line2 < line1 && amount_after == 0L)	    // nothing to do
 	return;
 
-    if (!cmdmod.lockmarks)
+    if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0)
     {
 	// named marks, lower case and upper case
 	for (i = 0; i < NMARKS; i++)
@@ -1123,7 +1112,7 @@ mark_adjust_internal(
     FOR_ALL_TAB_WINDOWS(tab, win)
     {
 #ifdef FEAT_JUMPLIST
-	if (!cmdmod.lockmarks)
+	if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0)
 	    // Marks in the jumplist.  When deleting lines, this may create
 	    // duplicate marks in the jumplist, they will be removed later.
 	    for (i = 0; i < win->w_jumplistlen; ++i)
@@ -1133,7 +1122,7 @@ mark_adjust_internal(
 
 	if (win->w_buffer == curbuf)
 	{
-	    if (!cmdmod.lockmarks)
+	    if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0)
 		// marks in the tag stack
 		for (i = 0; i < win->w_tagstacklen; i++)
 		    if (win->w_tagstack[i].fmark.fnum == fnum)
@@ -1239,7 +1228,8 @@ mark_col_adjust(
     win_T	*win;
     pos_T	*posp;
 
-    if ((col_amount == 0L && lnum_amount == 0L) || cmdmod.lockmarks)
+    if ((col_amount == 0L && lnum_amount == 0L)
+				       || (cmdmod.cmod_flags & CMOD_LOCKMARKS))
 	return; // nothing to do
 
     // named marks, lower case and upper case
